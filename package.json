@@ -1,38 +1,45 @@
 {
-  "name": "hardestcarquiz-api",
-  "version": "1.0.0",
-  "description": "This is the backend API for HardestCarQuiz, built using Cloudflare Workers and D1 Database. It handles quiz logic, serves dynamically generated questions, and stores user scores.",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
-  "scripts": {
-    "build": "tsc",
-    "prestart": "npm run build",
-    "start": "wrangler dev",
-    "lint": "eslint src/ --fix",
-    "format": "prettier --write \"src/**/*.ts\"",
-    "test": "jest"
-  },
-  "repository": {
-    "type": "git",
-    "url": "git+https://github.com/CarQuizHub/hardestcarquiz-api.git"
-  },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
-  "bugs": {
-    "url": "https://github.com/CarQuizHub/hardestcarquiz-api/issues"
-  },
-  "homepage": "https://github.com/CarQuizHub/hardestcarquiz-api#readme",
-  "devDependencies": {
-    "@eslint/js": "^9.19.0",
-    "@typescript-eslint/eslint-plugin": "^8.22.0",
-    "@typescript-eslint/parser": "^8.22.0",
-    "eslint": "^9.19.0",
-    "globals": "^15.14.0",
-    "jest": "^29.7.0",
-    "miniflare": "^3.20250129.0",
-    "prettier": "^3.4.2",
-    "typescript": "^5.7.3",
-    "wrangler": "^3.107.2"
-  }
+	"name": "hardestcarquiz-api",
+	"version": "1.0.0",
+	"private": true,
+	"description": "This is the backend API for HardestCarQuiz, built using Cloudflare Workers and D1 Database. It handles quiz logic, serves dynamically generated questions, and stores user scores.",
+	"main": "dist/index.js",
+	"types": "dist/index.d.ts",
+	"scripts": {
+		"build": "tsc",
+		"prestart": "npm run build",
+		"start": "wrangler dev",
+		"dev": "./scripts/dev_setup.sh",
+		"deploy": "wrangler deploy",
+		"cf-typegen": "wrangler types",
+		"lint": "eslint src/ --fix",
+		"format": "prettier --write \"src/**/*.ts\"",
+		"test": "jest"
+	},
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/CarQuizHub/hardestcarquiz-api.git"
+	},
+	"keywords": [],
+	"author": "",
+	"license": "ISC",
+	"bugs": {
+		"url": "https://github.com/CarQuizHub/hardestcarquiz-api/issues"
+	},
+	"homepage": "https://github.com/CarQuizHub/hardestcarquiz-api#readme",
+	"devDependencies": {
+		"@cloudflare/workers-types": "^4.20250129.0",
+		"@eslint/js": "^9.19.0",
+		"@types/node": "^22.13.0",
+		"@typescript-eslint/eslint-plugin": "^8.22.0",
+		"@typescript-eslint/parser": "^8.22.0",
+		"eslint": "^9.19.0",
+		"globals": "^15.14.0",
+		"jest": "^29.7.0",
+		"miniflare": "^3.20250129.0",
+		"prettier": "^3.4.2",
+		"typescript": "^5.7.3",
+		"wrangler": "^3.107.2",
+		"itty-router": "^5.0.18"
+	}
 }

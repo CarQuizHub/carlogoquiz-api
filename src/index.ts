@@ -1,8 +1,8 @@
+import router from './utils/router'; // Import router from utils folder
+import { Env } from './durable-objects/session'; // Import environment types from durable-objects
+
 export default {
-  async fetch(request: Request): Promise<Response> {
-    return new Response(
-      JSON.stringify({ message: "Hello from HardestCarQuiz API!" }),
-      { headers: { "Content-Type": "application/json" } }
-    );
-  },
+	fetch: async (request: Request, env: Env, ctx: ExecutionContext) => {
+		return router.handle(request, env);
+	},
 };
