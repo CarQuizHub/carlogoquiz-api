@@ -12,4 +12,3 @@ This is the **backend API** for [HardestCarQuiz](https://hardestcarquiz.com), bu
 - **Randomized quiz questions** based on difficulty
 - **Score tracking & progression**
 - **Image & sound-based questions**
-- **Fast & scalable using Cloudflare's global network**
