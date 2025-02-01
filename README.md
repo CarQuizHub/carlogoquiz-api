@@ -1,4 +1,4 @@
-# HardestCarQuiz API 🚀
+# HardestCarQuiz API
 
 This is the **backend API** for [HardestCarQuiz](https://hardestcarquiz.com), built using **Cloudflare Workers** and **D1 Database**. It handles quiz logic, serves dynamically generated questions, and stores user scores.
 
@@ -9,7 +9,7 @@ This is the **backend API** for [HardestCarQuiz](https://hardestcarquiz.com), bu
 - **CI/CD:** GitHub Actions + Wrangler
 
 ## 📌 Features
-- 🏎️ **Randomized quiz questions** based on difficulty
-- 📊 **Score tracking & progression**
-- 🖼️ **Image & sound-based questions**
-- 🚀 **Fast & scalable using Cloudflare's global network**
+- **Randomized quiz questions** based on difficulty
+- **Score tracking & progression**
+- **Image & sound-based questions**
+- **Fast & scalable using Cloudflare's global network**
