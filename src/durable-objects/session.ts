@@ -5,14 +5,17 @@ export interface Env {
 	SESSION_DO: DurableObjectNamespace;
 }
 
-interface QuestionTemplate {
-	question_id: number;
-	template_text: string;
+interface Brand {
+	id: number;
+	brand_name: string;
+	hidden_logo: string;
+	logo: string;
+	difficulty: number;
 }
 
-interface AnswerOption {
-	answer_id: number;
-	answer_text: string;
+interface Question {
+	logo: string;
+	brand_id: number;
 }
 
 interface SessionData {
@@ -34,107 +37,60 @@ export class Session extends DurableObject {
 
 	async fetch(request: Request) {
 		const url = new URL(request.url);
-		const difficulty = request.headers.get('Difficulty');
 
 		if (url.pathname === '/session/start') {
 			return this.startSession();
-		} else if (url.pathname === '/session/question') {
-			if (!difficulty) return new Response('Missing difficulty parameter', { status: 400 });
-			return await this.generateQuestion(parseInt(difficulty));
-		} else if (url.pathname === '/session/answer') {
-			return await this.validateAnswer(request);
 		}
 
 		return new Response('Not Found', { status: 404 });
 	}
 
 	async startSession() {
-		this.sessionData = { score: 0, currentQuestion: null };
-		return new Response(JSON.stringify({ message: 'Session started', score: this.sessionData.score }), {
-			headers: { 'Content-Type': 'application/json' },
-		});
+		try {
+			const brands = await this.fetchBrands();
+			if (!brands.length) {
+				return new Response(JSON.stringify({ error: 'No brands available' }), { status: 400 });
+			}
+
+			const questions = this.generateQuestions(brands);
+
+			return new Response(
+				JSON.stringify({
+					brands: brands.map((brand) => ({ brandId: brand.id, brandName: brand.brand_name })),
+					questions,
+				}),
+				{
+					headers: { 'Content-Type': 'application/json' },
+				},
+			);
+		} catch (error) {
+			return new Response(JSON.stringify({ error: 'Failed to start session' }), { status: 500 });
+		}
 	}
 
-	async generateQuestion(difficulty: number) {
-		const query = `
-            WITH selected_template AS (
-                SELECT qt.id AS question_id, qt.template_text
-                FROM question_templates qt
-                JOIN question_template_difficulties qtd ON qt.id = qtd.question_template_id
-                WHERE qtd.difficulty = ?
-                ORDER BY RANDOM()
-                LIMIT 1
-            ),
-            correct_answer AS (
-                SELECT id AS answer_id, name AS answer_text
-                FROM brands
-                WHERE difficulty = (SELECT expected_options FROM selected_template)
-                ORDER BY RANDOM()
-                LIMIT 1
-            ),
-            distractors AS (
-                SELECT id AS answer_id, name AS answer_text
-                FROM brands
-                WHERE difficulty = (SELECT expected_options FROM selected_template)
-                AND id NOT IN (SELECT answer_id FROM correct_answer)
-                ORDER BY RANDOM()
-                LIMIT (SELECT expected_options - 1 FROM selected_template)
-            )
-            SELECT * FROM selected_template
-            UNION ALL
-            SELECT * FROM correct_answer
-            UNION ALL
-            SELECT * FROM distractors;
-        `;
-
-		const { results }: { results: (QuestionTemplate & AnswerOption)[] } = await this.env.DB.prepare(query).bind(difficulty).all();
-
-		if (!results.length) return new Response(JSON.stringify({ error: 'No questions available' }), { status: 400 });
-
-		const template = results[0] as QuestionTemplate;
-		const answers = results.slice(1).map((row) => ({
-			id: row.answer_id,
-			text: row.answer_text,
-		}));
-
-		answers.sort(() => Math.random() - 0.5);
-
-		const correctAnswer = answers.find((answer) => answer.id === results[1].answer_id);
-		this.sessionData.currentQuestion = { question_id: template.question_id, correct_answer_id: correctAnswer!.id };
-
-		return new Response(
-			JSON.stringify({
-				question_id: template.question_id,
-				question_text: template.template_text,
-				answers,
-			}),
-			{
-				headers: { 'Content-Type': 'application/json' },
-			},
-		);
+	async fetchBrands(): Promise<Brand[]> {
+		const brandsQuery = 'SELECT id, brand_name, difficulty, logo, hidden_logo FROM brands';
+		const { results: brands }: { results: Brand[] } = await this.env.DB.prepare(brandsQuery).all();
+		return brands;
 	}
 
-	async validateAnswer(request: Request) {
-		const body: { selected_answer_id: number } = await request.json();
+	generateQuestions(brands: Brand[]): Question[] {
+		const difficultyMap: Record<number, number> = { 1: 6, 2: 5, 3: 4, 4: 3, 5: 2 };
+		const questions: Question[] = [];
 
-		if (!this.sessionData.currentQuestion) {
-			return new Response(JSON.stringify({ error: 'No active question' }), { status: 400 });
+		for (const [difficulty, count] of Object.entries(difficultyMap)) {
+			const difficultyBrands = brands.filter((brand) => brand.difficulty === Number(difficulty));
+			const selectedBrands = this.getRandomElements(difficultyBrands, count);
+			selectedBrands.forEach((brand) => {
+				questions.push({ logo: brand.hidden_logo, brand_id: brand.id });
+			});
 		}
 
-		const isCorrect = this.sessionData.currentQuestion.correct_answer_id === body.selected_answer_id;
+		return questions;
+	}
 
-		if (isCorrect) {
-			this.sessionData.score += 1;
-		}
-
-		return new Response(
-			JSON.stringify({
-				is_correct: isCorrect,
-				new_score: this.sessionData.score,
-			}),
-			{
-				headers: { 'Content-Type': 'application/json' },
-			},
-		);
+	getRandomElements<T>(array: T[], count: number): T[] {
+		const shuffled = array.sort(() => 0.5 - Math.random());
+		return shuffled.slice(0, count);
 	}
 }

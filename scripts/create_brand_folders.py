@@ -46,7 +46,7 @@ car_brands = [
     "Yamaha", "Yulon",
     "Zagato", "ZAZ", "Zenvo", "Zhidou", "Zotye", "Zeekr", 
 ]
-#Need to add LUCID, HUMMER, TVR, JEEP, ZEEKR to the accurate list when I sort out logo that are words
+#Need to add LUCID, HUMMER, TVR, JEEP, ZEEKR, DMC to the accurate list when I sort out logo that are words
 
 # Subfolders for each brand
 subfolders = ["logo", "models", "audio"]
