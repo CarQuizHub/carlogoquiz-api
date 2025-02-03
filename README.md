@@ -1,6 +1,6 @@
 # Car Logo Quiz API
 
-This is the **backend API** for [HardestCarQuiz](https://hardestcarquiz.com), built using **Cloudflare Workers** and **D1 Database**. It handles quiz logic, serves dynamically generated questions, and stores user scores.
+This is the **backend API** for [Car Logo Quiz](https://carlogoquiz.com), built using **Cloudflare Workers**, **R1 Object Storage** and **D1 Database**. It handles quiz logic, serves dynamically generated questions, and stores user scores.
 
 ## 🛠 Tech Stack
 - **Backend:** Cloudflare Workers (Serverless)
