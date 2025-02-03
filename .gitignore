@@ -130,9 +130,11 @@ dist
 .pnp.*
 
 # wrangler project
-
 .dev.vars
 .wrangler/
 .env
 wrangler.toml
 worker-configuration.d.ts
+
+# Ignore local assets folder (since assets are stored in R2)
+assets/
