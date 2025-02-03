@@ -1,5 +1,16 @@
 -- 0001_create_tables.sql
 
+-- Create the brands table to store car brand information.
+CREATE TABLE IF NOT EXISTS brands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    brand_name TEXT NOT NULL,                -- Brand name
+    difficulty INTEGER NOT NULL,             -- Recognition difficulty
+    country TEXT NOT NULL,                   -- Country of origin (for association questions)
+    logo TEXT NOT NULL,                      -- URL to the brand logo
+    hidden_logo TEXT NOT NULL                -- URL to the hidden logo
+);
+
+/*
 -- Create the media table to store images, audio, etc.
 CREATE TABLE IF NOT EXISTS media (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -26,16 +37,6 @@ CREATE TABLE IF NOT EXISTS question_template_difficulties (
     FOREIGN KEY (question_template_id) REFERENCES question_templates(id)
 );
 
--- Create the brands table to store car brand information.
-CREATE TABLE IF NOT EXISTS brands (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    brand_name TEXT NOT NULL,                -- Brand name
-    difficulty INTEGER NOT NULL,             -- Recognition difficulty
-    country TEXT NOT NULL,                   -- Country of origin (for association questions)
-    logo TEXT NOT NULL,                      -- URL to the brand logo
-    hidden_logo TEXT NOT NULL,               -- URL to the hidden logo (for quiz reveal)
-);
-
 -- Create the models table to store car model information.
 CREATE TABLE IF NOT EXISTS models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -46,3 +47,4 @@ CREATE TABLE IF NOT EXISTS models (
     production_year INTEGER,        -- Year of production (for age comparisons)
     FOREIGN KEY (brand_id) REFERENCES brands(id),
 );
+*/
