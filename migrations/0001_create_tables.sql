@@ -1,10 +1,21 @@
 -- 0001_create_tables.sql
 
+-- Create the brands table to store car brand information.
+CREATE TABLE IF NOT EXISTS brands (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    brand_name TEXT NOT NULL,                -- Brand name
+    difficulty INTEGER NOT NULL,             -- Recognition difficulty
+    country TEXT NOT NULL,                   -- Country of origin (for association questions)
+    logo TEXT NOT NULL,                      -- URL to the brand logo
+    hidden_logo TEXT NOT NULL                -- URL to the hidden logo
+);
+
+/*
 -- Create the media table to store images, audio, etc.
 CREATE TABLE IF NOT EXISTS media (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
-    media_type TEXT NOT NULL,       -- e.g. 'image', 'audio'
-    link TEXT NOT NULL,              -- URL to the media asset
+    media_type TEXT NOT NULL,     -- e.g. 'image', 'audio'
+    url_value TEXT NOT NULL,      -- URL to the media asset
     alt_text TEXT                 -- Alternative text for accessibility
 );
 
@@ -26,44 +37,14 @@ CREATE TABLE IF NOT EXISTS question_template_difficulties (
     FOREIGN KEY (question_template_id) REFERENCES question_templates(id)
 );
 
--- Create the brands table to store car brand information.
-CREATE TABLE IF NOT EXISTS brands (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,             -- Brand name
-    difficulty INTEGER NOT NULL,    -- Recognition difficulty
-    country TEXT,                   -- Country of origin (for association questions)
-    FOREIGN KEY (media_id) REFERENCES media(id)
-);
-
 -- Create the models table to store car model information.
 CREATE TABLE IF NOT EXISTS models (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     brand_id INTEGER NOT NULL,      -- Reference to the parent brand
-    name TEXT NOT NULL,             -- Model name
+    model_name TEXT NOT NULL,             -- Model name
     difficulty INTEGER NOT NULL,    -- Model recognition difficulty
     performance INTEGER,            -- Performance metric (for speed comparisons)
     production_year INTEGER,        -- Year of production (for age comparisons)
     FOREIGN KEY (brand_id) REFERENCES brands(id),
-    FOREIGN KEY (media_id) REFERENCES media(id)
 );
-
--- Create a many-to-many relationship between models and media
-CREATE TABLE IF NOT EXISTS model_media (
-    model_id INTEGER NOT NULL,
-    media_id INTEGER NOT NULL,
-    media_usage TEXT NOT NULL,      -- e.g. 'image', 'engine_sound'
-    PRIMARY KEY (model_id, media_id),
-    FOREIGN KEY (model_id) REFERENCES models(id),
-    FOREIGN KEY (media_id) REFERENCES media(id)
-);
-
--- Create a many-to-many relationship between brands and media
-CREATE TABLE IF NOT EXISTS brand_media (
-    brand_id INTEGER NOT NULL,
-    media_id INTEGER NOT NULL,
-    media_usage TEXT NOT NULL,      -- e.g. 'logo', 'hidden_logo'
-    PRIMARY KEY (brand_id, media_id),
-    FOREIGN KEY (brand_id) REFERENCES brands(id),
-    FOREIGN KEY (media_id) REFERENCES media(id)
-);
-
+*/
