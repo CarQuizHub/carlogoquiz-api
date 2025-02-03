@@ -1,5 +1,5 @@
 {
-	"name": "hardestcarquiz-api",
+	"name": "carlogoquiz-api",
 	"version": "1.0.0",
 	"private": true,
 	"description": "This is the backend API for HardestCarQuiz, built using Cloudflare Workers and D1 Database. It handles quiz logic, serves dynamically generated questions, and stores user scores.",
