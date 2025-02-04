@@ -1,8 +1,13 @@
-import router from './utils/router'; // Import router from utils folder
-import { Env } from './durable-objects/session'; // Import environment types from durable-objects
+import router from './api/router';
+import { Env } from './types';
 
 export default {
-	fetch: async (request: Request, env: Env, ctx: ExecutionContext) => {
-		return router.handle(request, env);
+	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
+		try {
+			return await router.handle(request, env);
+		} catch (error) {
+			console.error('Unhandled error:', error);
+			return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
+		}
 	},
 };
