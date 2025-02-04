@@ -1,4 +1,4 @@
-import { Brand, Question } from '../../types';
+import { Brand, AnswerSubmission, StoredQuestion } from '../../types';
 
 export function prependBaseUrl(brands: Brand[], baseUrl: string): Brand[] {
 	return brands.map((brand) => ({
@@ -8,19 +8,27 @@ export function prependBaseUrl(brands: Brand[], baseUrl: string): Brand[] {
 	}));
 }
 
-export function generateLogoQuestions(brands: Brand[]): Question[] {
+export function generateLogoQuestions(brands: Brand[]): StoredQuestion[] {
 	const difficultyMap: Record<number, number> = { 1: 6, 2: 5, 3: 4, 4: 3, 5: 2 };
-	const questions: Question[] = [];
+	const questions: StoredQuestion[] = [];
 
 	for (const [difficulty, count] of Object.entries(difficultyMap)) {
 		const difficultyBrands = brands.filter((brand) => brand.difficulty === Number(difficulty));
 		const selectedBrands = getRandomElements(difficultyBrands, count);
 		selectedBrands.forEach((brand) => {
-			questions.push({ logo: brand.hidden_logo });
+			questions.push({ brandId: brand.id, logo: brand.hidden_logo });
 		});
 	}
 
 	return questions;
+}
+
+export function isValidAnswerSubmission(obj: unknown): obj is AnswerSubmission {
+	if (typeof obj === 'object' && obj !== null && 'questionNumber' in obj && 'brandId' in obj) {
+		const submission = obj as Record<string, unknown>;
+		return Number.isInteger(submission.questionNumber) && Number.isInteger(submission.brandId);
+	}
+	return false;
 }
 
 function getRandomElements<T>(array: T[], count: number): T[] {
