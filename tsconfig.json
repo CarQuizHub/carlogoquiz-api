@@ -36,6 +36,12 @@
 
 		/* Enable all strict type-checking options. */
 		"strict": true,
+		"noImplicitAny": true,
+		"strictNullChecks": true,
+		"strictPropertyInitialization": true,
+		"noImplicitReturns": true,
+		"noFallthroughCasesInSwitch": true,
+		"exactOptionalPropertyTypes": true,
 
 		/* Skip type checking all .d.ts files. */
 		"skipLibCheck": true
