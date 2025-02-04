@@ -1,5 +1,11 @@
 -- 0001_create_tables.sql
 
+-- Create the countries table to store country information.
+CREATE TABLE IF NOT EXISTS countries (
+    id INTEGER PRIMARY KEY,
+    country_name TEXT NOT NULL UNIQUE -- Country name
+);
+
 -- Create the brands table to store car brand information.
 CREATE TABLE IF NOT EXISTS brands (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
