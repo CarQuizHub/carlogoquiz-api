@@ -2,8 +2,8 @@ import { Brand, Env } from '../../types';
 import { prependBaseUrl } from './utils';
 
 export async function fetchBrands(env: Env): Promise<Brand[]> {
-	const baseUrl = env.PRODUCTION === 'false' ? env.MEDIA_BASE_URL : env.R2_BUCKET_URL;
-	const brandsQuery = 'SELECT * FROM brands';
+	const baseUrl = env.MEDIA_BASE_URL;
+	const brandsQuery = 'SELECT id, brand_name, difficulty, logo, hidden_logo FROM brands;';
 	try {
 		const { results: brands }: { results: Brand[] } = await env.DB.prepare(brandsQuery).all();
 		const updatedBrands = prependBaseUrl(brands, baseUrl);
