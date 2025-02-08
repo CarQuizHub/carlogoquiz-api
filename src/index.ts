@@ -1,5 +1,6 @@
 import router from './api/router';
 import { Env } from './types';
+import { createJsonResponse } from './utils/response';
 
 export default {
 	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
@@ -7,7 +8,7 @@ export default {
 			return await router.handle(request, env);
 		} catch (error) {
 			console.error('Unhandled error:', error);
-			return new Response(JSON.stringify({ error: 'Internal Server Error' }), { status: 500 });
+			return createJsonResponse({ error: 'Internal Server Error' }, 500);
 		}
 	},
 };
