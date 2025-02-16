@@ -1,0 +1,73 @@
+{
+	"name": "carlogoquiz-api-dev",
+	"workers_dev": true,
+	"main": "src/index.ts",
+	"compatibility_date": "2025-01-29",
+	"migrations": [
+		{
+			"tag": "v1",
+			"new_classes": ["Session"]
+		}
+	],
+	"durable_objects": {
+		"bindings": [
+			{
+				"name": "SESSION_DO",
+				"class_name": "Session"
+			}
+		]
+	},
+	"observability": {
+		"enabled": true
+	},
+	"site": {
+		"bucket": "./assets"
+	},
+	"env": {
+		"dev": {
+			"name": "carlogoquiz-api-dev",
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "SESSION_DO",
+						"class_name": "Session"
+					}
+				]
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "CarQuizHub-dev",
+					"database_id": "00000000-0000-0000-0000-000000000000"
+				}
+			],
+			"vars": {
+				"MEDIA_BASE_URL": "http://localhost:8787",
+				"PRODUCTION": "false"
+			}
+		},
+		"production": {
+			"name": "carlogoquiz-api",
+			"workers_dev": false,
+			"durable_objects": {
+				"bindings": [
+					{
+						"name": "SESSION_DO",
+						"class_name": "Session"
+					}
+				]
+			},
+			"d1_databases": [
+				{
+					"binding": "DB",
+					"database_name": "CarQuizHub",
+					"database_id": "my-production-database-id"
+				}
+			],
+			"vars": {
+				"MEDIA_BASE_URL": "https://my-production-r2-bucket-url",
+				"PRODUCTION": "true"
+			}
+		}
+	}
+}
