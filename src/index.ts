@@ -1,14 +1,14 @@
+import { Session } from './services/session/session'; // Ensure the correct path
 import router from './api/router';
 import { Env } from './types';
-import { createJsonResponse } from './utils/response';
+import { error } from 'itty-router';
+
+export { Session };
 
 export default {
-	async fetch(request: Request, env: Env, ctx: ExecutionContext) {
-		try {
-			return await router.handle(request, env);
-		} catch (error) {
-			console.error('Unhandled error:', error);
-			return createJsonResponse({ error: 'Internal Server Error' }, 500);
-		}
-	},
+	fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
+		router.fetch(request, env, ctx).catch((err) => {
+			console.error('Unhandled error:', err);
+			return error(500, 'Internal Server Error');
+		}),
 };

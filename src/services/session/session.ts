@@ -1,7 +1,7 @@
 import { DurableObject } from 'cloudflare:workers';
 import { createJsonResponse } from '../../utils/response';
 import { fetchBrands } from './brandRepository';
-import { generateLogoQuestions, isValidAnswerSubmission, calculateLogoQuizScore } from './utils';
+import { generateLogoQuestions, isValidAnswerSubmission, calculateLogoQuizScore, GenerateLogoUrl } from './utils';
 import {
 	SessionData,
 	Env,
@@ -13,7 +13,7 @@ import {
 	JsonResponse,
 } from '../../types';
 
-export class Session extends DurableObject {
+export class Session extends DurableObject<Env> {
 	public env: Env;
 	private state: DurableObjectState;
 	private sessionData: SessionData | null = null; // Add a 'lastQuestion' property to the Session class to store the last question asked
@@ -24,10 +24,13 @@ export class Session extends DurableObject {
 		this.state = state;
 		this.env = env;
 		this.sessionId = this.state.id.toString();
-
 		state.blockConcurrencyWhile(async () => {
-			const storedSession = await this.state.storage.get<SessionData>(`session-${this.sessionId}`);
-			this.sessionData = storedSession ?? { score: 0, questions: {}, lives: 3 };
+			let storedSession = await state.storage.get<SessionData>(`session-${this.sessionId}`);
+			this.sessionData = {
+				score: storedSession?.score ?? 0,
+				lives: storedSession?.lives ?? 3,
+				questions: storedSession?.questions ?? {},
+			};
 		});
 	}
 
@@ -36,12 +39,16 @@ export class Session extends DurableObject {
 
 		switch (url.pathname) {
 			case '/session/start':
+				console.log('Processing session start...');
 				return this.startSession();
 			case '/session/answer':
+				console.log('Processing answer submission...');
 				return this.submitAnswer(request);
 			case '/session/end':
+				console.log('Processing session end...');
 				return this.endSession();
 			default:
+				console.log('❌ Route not found in Durable Object!');
 				return createJsonResponse<ApiErrorResponse>({ error: 'Not Found' }, 404);
 		}
 	}
@@ -54,10 +61,9 @@ export class Session extends DurableObject {
 				return createJsonResponse<ApiErrorResponse>({ error: 'No brands available' }, 400);
 			}
 
-			if (this.sessionData) {
+			if (this.sessionData && Object.keys(this.sessionData.questions).length > 0) {
 				return createJsonResponse<ApiStartSessionResponse>(
 					{
-						sessionId: this.sessionId,
 						brands: brands.map(({ id, brand_name }) => ({ id, brand_name })),
 						questions: Object.values(this.sessionData.questions).map(({ logo }) => ({ question: { logo } })),
 					},
@@ -66,7 +72,7 @@ export class Session extends DurableObject {
 				);
 			}
 
-			const storedQuestions: StoredQuestion[] = generateLogoQuestions(brands);
+			const storedQuestions: StoredQuestion[] = generateLogoQuestions(brands, this.env);
 			this.sessionData = {
 				score: 0,
 				questions: Object.fromEntries(storedQuestions.map((q, index) => [index, q])),
@@ -76,7 +82,6 @@ export class Session extends DurableObject {
 
 			return createJsonResponse<ApiStartSessionResponse>(
 				{
-					sessionId: this.sessionId,
 					brands: brands.map(({ id, brand_name }) => ({ id, brand_name })),
 					questions: storedQuestions.map(({ logo }) => ({ question: { logo } })),
 				},
@@ -103,11 +108,11 @@ export class Session extends DurableObject {
 
 			const { questionNumber, brandId } = body;
 
-			const correctAnswer = this.sessionData.questions[questionNumber];
-			if (!correctAnswer) {
+			if (!this.sessionData.questions[questionNumber]) {
 				return createJsonResponse<ApiErrorResponse>({ error: 'Invalid question number' }, 400);
 			}
 
+			const correctAnswer = this.sessionData.questions[questionNumber];
 			const isCorrect = correctAnswer.brandId === brandId;
 			this.sessionData.score += isCorrect ? calculateLogoQuizScore(correctAnswer.difficulty) : 0;
 			this.sessionData.lives -= isCorrect ? 0 : 1;
@@ -119,6 +124,7 @@ export class Session extends DurableObject {
 					correct: isCorrect,
 					lives: this.sessionData.lives,
 					score: this.sessionData.score,
+					logo: GenerateLogoUrl(correctAnswer.mediaId, false, this.env.MEDIA_BASE_URL),
 				},
 				200,
 			);

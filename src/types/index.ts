@@ -6,8 +6,7 @@ export interface Brand {
 	id: number;
 	brand_name: string;
 	difficulty: number;
-	logo: string;
-	hidden_logo: string;
+	media_id: string;
 }
 
 export interface Question {
@@ -17,6 +16,7 @@ export interface Question {
 export interface StoredQuestion extends Question {
 	brandId: number;
 	difficulty: number;
+	mediaId: string;
 }
 export interface AnswerRequest {
 	questionNumber: number;
@@ -24,15 +24,20 @@ export interface AnswerRequest {
 }
 
 export interface ApiStartSessionResponse {
-	sessionId: string;
-	brands: { id: number; brand_name: string }[];
-	questions: { question: Question }[];
+	brands: {
+		id: number;
+		brand_name: string;
+	}[];
+	questions: {
+		question: Question;
+	}[];
 }
 
 export interface ApiSubmitAnswerResponse {
 	correct: boolean;
 	score: number;
 	lives: number;
+	logo: string;
 }
 
 export interface ApiErrorResponse {
