@@ -1,4 +1,6 @@
+import { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { createJsonResponse } from './../utils/response';
+import { Session } from '../services/session/session';
 
 export type JsonResponse<T> = Promise<ReturnType<typeof createJsonResponse<T>>>;
 
@@ -21,6 +23,7 @@ export interface StoredQuestion extends Question {
 export interface AnswerRequest {
 	questionNumber: number;
 	brandId: number;
+	timeTaken: number | null;
 }
 
 export interface ApiStartSessionResponse {
@@ -34,7 +37,7 @@ export interface ApiStartSessionResponse {
 }
 
 export interface ApiSubmitAnswerResponse {
-	correct: boolean;
+	isCorrect: boolean;
 	score: number;
 	lives: number;
 	logo: string;
@@ -47,13 +50,15 @@ export interface ApiErrorResponse {
 export interface SessionData {
 	score: number;
 	lives: number;
+	currentQuestion: number;
 	questions: Record<number, StoredQuestion>;
-	//currentQuestion: { question_id: number; correct_answer_id: number } | null;
 }
 
 export interface Env {
 	DB: D1Database;
-	SESSION_DO: DurableObjectNamespace;
+	BRANDS_KV: KVNamespace;
+	SESSION_DO: DurableObjectNamespace<Session>;
 	MEDIA_BASE_URL: string;
-	PRODUCTION: string;
+	PRODUCTION: boolean;
+	BRANDS_CACHE_DURATION: string;
 }

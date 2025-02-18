@@ -29,6 +29,7 @@
 	},
 	"homepage": "https://github.com/CarQuizHub/hardestcarquiz-api#readme",
 	"devDependencies": {
+		"@cloudflare/vitest-pool-workers": "^0.6.16",
 		"@cloudflare/workers-types": "^4.20250129.0",
 		"@eslint/js": "^9.19.0",
 		"@types/node": "^22.13.0",
@@ -45,6 +46,7 @@
 		"tsx": "^4.19.2",
 		"typescript": "^5.7.3",
 		"uuid": "^11.0.5",
-		"wrangler": "^3.107.2"
+		"vitest": "^2.1.8",
+		"wrangler": "^3.109.1"
 	}
 }

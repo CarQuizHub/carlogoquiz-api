@@ -2,7 +2,7 @@ import { Brand, AnswerRequest, StoredQuestion, Env } from '../../types';
 
 export function GenerateLogoUrl(mediaId: string, isHidden: boolean, baseUrl: string): string {
 	const imageType = isHidden ? 'logo-hidden' : 'logo';
-	return `${baseUrl}/brands/${mediaId}/${imageType}?format=auto`;
+	return `${baseUrl}/brands/${mediaId}/logo/${imageType}.webp`;
 }
 
 export function generateLogoQuestions(brands: Brand[], env: Env): StoredQuestion[] {
@@ -10,27 +10,38 @@ export function generateLogoQuestions(brands: Brand[], env: Env): StoredQuestion
 	const easyPoolNumber = 9;
 	const hardPoolDifficultyOrder = [3, 3, 3, 4, 4, 5];
 
-	const groupedBrands: Record<number, Brand[]> = brands.reduce(
-		(acc, brand) => {
-			acc[brand.difficulty] = acc[brand.difficulty] || [];
-			acc[brand.difficulty].push(brand);
-			return acc;
-		},
-		{} as Record<number, Brand[]>,
-	);
+	const groupedBrands: Record<number, Brand[]> = {};
+	brands.forEach((brand) => {
+		if (!groupedBrands[brand.difficulty]) groupedBrands[brand.difficulty] = [];
+		groupedBrands[brand.difficulty].push(brand);
+	});
 
-	const easyPool = [...(groupedBrands[1] || []), ...(groupedBrands[2] || [])];
-	const firstNine = getRandomElements(easyPool, easyPoolNumber);
+	const selectedIds = new Set<number>();
+	const easyBrands = getRandomElements((groupedBrands[1] || []).concat(groupedBrands[2] || []), easyPoolNumber);
+	easyBrands.forEach((b) => selectedIds.add(b.id));
 
-	const remainingQuestions = hardPoolDifficultyOrder.map((difficulty) => getRandomElements(groupedBrands[difficulty] || [], 1)).flat();
+	const remainingQuestions = hardPoolDifficultyOrder.map((difficulty) => {
+		const pool = (groupedBrands[difficulty] || []).filter((b) => !selectedIds.has(b.id));
+		const brand = getRandomElements(pool, 1)[0];
+		if (brand) selectedIds.add(brand.id);
+		return brand;
+	});
 
-	const selectedBrands = [...firstNine, ...remainingQuestions];
-	return selectedBrands.map((brand) => ({
+	return [...easyBrands, ...remainingQuestions].map((brand) => ({
 		brandId: brand.id,
 		difficulty: brand.difficulty,
 		mediaId: brand.media_id,
 		logo: GenerateLogoUrl(brand.media_id, true, baseUrl),
 	}));
+}
+
+export function CalculateTimeTakenBonus(timeTaken: number): number {
+	const maxBonus = 55;
+	const minBonus = 1;
+	const timeThreshold = 180;
+
+	let timeBonus = Math.max(minBonus, maxBonus - timeTaken * (maxBonus / timeThreshold));
+	return timeBonus;
 }
 
 export function isValidAnswerSubmission(obj: unknown): obj is AnswerRequest {
