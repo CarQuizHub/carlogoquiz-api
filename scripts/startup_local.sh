@@ -59,4 +59,4 @@ else
 fi
 
 echo "to start a session locally, run the following command:"
-echo "curl -s http://127.0.0.1:8787/session/start | python -m json.tool"
+echo "curl -s http://127.0.0.1:8787/session/start | python -m json.tool or curl -s -i -H "session_id: {sessionId}" http://127.0.0.1:8787/session/start"

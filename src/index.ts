@@ -1,14 +1,20 @@
-import { Session } from './services/session/session'; // Ensure the correct path
+import { Session } from './services/session/session';
 import router from './api/router';
-import { Env } from './types';
-import { error } from 'itty-router';
+import { Env, ApiErrorResponse } from './types';
+import { createJsonResponse } from './utils/response';
 
 export { Session };
 
 export default {
 	fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
 		router.fetch(request, env, ctx).catch((err) => {
-			console.error('Unhandled error:', err);
-			return error(500, 'Internal Server Error');
+			const sessionId = request.headers.get('session_id') || 'unknown_session';
+
+			console.error({
+				event: 'unhandled_error',
+				sessionId,
+				error: err instanceof Error ? err.message : 'Unknown error occurred',
+			});
+			return createJsonResponse<ApiErrorResponse>({ error: 'Internal Server Error' }, 500);
 		}),
 };

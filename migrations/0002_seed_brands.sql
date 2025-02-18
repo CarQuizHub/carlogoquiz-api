@@ -19,7 +19,8 @@ INSERT INTO countries (id, country_name) VALUES
 (14, 'Czech Republic'),
 (15, 'Spain'),
 (16, 'Lebanon'),
-(17, 'Vietnam');
+(17, 'Vietnam'),
+(18, 'Denmark');
 
 -- Seed data for the brands table.
 INSERT INTO brands (brand_name, difficulty, country_id) VALUES
@@ -98,7 +99,7 @@ INSERT INTO brands (brand_name, difficulty, country_id) VALUES
 ('Saab', 2, 12),
 ('SEAT', 2, 15),
 ('Skoda', 3, 14),
-('Smart', 2, 5),
+('Smart', 3, 5),
 ('SSC North America', 5, 7),
 ('Subaru', 2, 2),
 ('Suzuki', 2, 2),
@@ -110,4 +111,5 @@ INSERT INTO brands (brand_name, difficulty, country_id) VALUES
 ('Volkswagen', 1, 5),
 ('Volvo', 2, 12),
 ('W Motors', 5, 16),
-('XPeng', 4, 3);
+('XPeng', 4, 3),
+('Zenvo', 5, 18);

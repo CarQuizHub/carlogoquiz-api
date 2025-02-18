@@ -20,12 +20,13 @@
 	"observability": {
 		"enabled": true
 	},
-	"site": {
-		"bucket": "./assets"
-	},
 	"env": {
 		"dev": {
 			"name": "carlogoquiz-api-dev",
+			"workers_dev": true,
+			"assets": {
+				"directory": "./assets"
+			},
 			"durable_objects": {
 				"bindings": [
 					{
@@ -34,17 +35,19 @@
 					}
 				]
 			},
+			"kv_namespaces": [
+				{
+					"binding": "BRANDS_KV",
+					"id": "my-dev-kv-id"
+				}
+			],
 			"d1_databases": [
 				{
 					"binding": "DB",
 					"database_name": "CarQuizHub-dev",
-					"database_id": "00000000-0000-0000-0000-000000000000"
+					"database_id": "my-dev-d1-id"
 				}
-			],
-			"vars": {
-				"MEDIA_BASE_URL": "http://localhost:8787",
-				"PRODUCTION": "false"
-			}
+			]
 		},
 		"production": {
 			"name": "carlogoquiz-api",
@@ -57,17 +60,19 @@
 					}
 				]
 			},
+			"kv_namespaces": [
+				{
+					"binding": "BRANDS_KV",
+					"id": "my-prod-kv-id"
+				}
+			],
 			"d1_databases": [
 				{
 					"binding": "DB",
 					"database_name": "CarQuizHub",
 					"database_id": "my-production-database-id"
 				}
-			],
-			"vars": {
-				"MEDIA_BASE_URL": "https://my-production-r2-bucket-url",
-				"PRODUCTION": "true"
-			}
+			]
 		}
 	}
 }
