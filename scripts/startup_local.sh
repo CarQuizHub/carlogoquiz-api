@@ -12,7 +12,7 @@ fi
 # Open a new Windows Terminal for Wrangler Dev Server
 if ! netstat -ano | grep -q ":8787"
 then
-    echo "Opening new terminal window to run: wrangler dev --local --env dev"
+    echo "Opening new terminal window to run: wrangler dev --local --env dev --inspect"
     start "Wrangler Dev" cmd /k "cd /d \"%CD%\""
 fi
 

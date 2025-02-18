@@ -27,6 +27,11 @@
 			"assets": {
 				"directory": "./assets"
 			},
+			"vars": {
+				"MEDIA_BASE_URL": "http://localhost:8787",
+				"PRODUCTION": "false",
+				"BRANDS_CACHE_DURATION": "10"
+			},
 			"durable_objects": {
 				"bindings": [
 					{
@@ -52,6 +57,11 @@
 		"production": {
 			"name": "carlogoquiz-api",
 			"workers_dev": false,
+			"vars": {
+				"MEDIA_BASE_URL": "https://my-production-r2-bucket-url",
+				"PRODUCTION": true,
+				"BRANDS_CACHE_DURATION": "604800"
+			},
 			"durable_objects": {
 				"bindings": [
 					{
