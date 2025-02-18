@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { fetchBrands } from '../../src/services/session/brandRepository';
+import { fetchBrands } from '../../src/repositories/brandRepository';
 import type { Brand, Env } from '../../src/types';
 
 const sessionId = 'test-session';
