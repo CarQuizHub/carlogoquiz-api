@@ -1,7 +1,7 @@
-import { Session } from './services/session/session';
+import { Session } from './durableObjects/session';
 import router from './api/router';
 import { Env, ApiErrorResponse } from './types';
-import { createJsonResponse } from './utils/response';
+import { createJsonResponse } from './api/response';
 
 export { Session };
 

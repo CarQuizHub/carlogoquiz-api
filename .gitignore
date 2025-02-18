@@ -130,6 +130,7 @@ dist
 .pnp.*
 
 # wrangler project
+.dev.vars
 .dev.vars.dev
 .dev.vars.prod
 .wrangler/

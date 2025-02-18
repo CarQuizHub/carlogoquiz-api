@@ -1,4 +1,4 @@
-import { Brand, AnswerRequest, StoredQuestion, Env } from '../../types';
+import { Brand, StoredQuestion, Env } from '../types';
 
 export function GenerateLogoUrl(mediaId: string, isHidden: boolean, baseUrl: string): string {
 	const imageType = isHidden ? 'logo-hidden' : 'logo';
@@ -33,23 +33,6 @@ export function generateLogoQuestions(brands: Brand[], env: Env): StoredQuestion
 		mediaId: brand.media_id,
 		logo: GenerateLogoUrl(brand.media_id, true, baseUrl),
 	}));
-}
-
-export function CalculateTimeTakenBonus(timeTaken: number): number {
-	const maxBonus = 55;
-	const minBonus = 1;
-	const timeThreshold = 180;
-
-	let timeBonus = Math.max(minBonus, maxBonus - timeTaken * (maxBonus / timeThreshold));
-	return timeBonus;
-}
-
-export function isValidAnswerSubmission(obj: unknown): obj is AnswerRequest {
-	if (typeof obj === 'object' && obj !== null && 'questionNumber' in obj && 'brandId' in obj) {
-		const submission = obj as AnswerRequest;
-		return Number.isInteger(submission.questionNumber) && Number.isInteger(submission.brandId);
-	}
-	return false;
 }
 
 export function calculateLogoQuizScore(difficulty: number): number {

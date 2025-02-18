@@ -5,7 +5,7 @@ import {
 	CalculateTimeTakenBonus,
 	isValidAnswerSubmission,
 	calculateLogoQuizScore,
-} from '../../src/services/session/utils';
+} from '../../src/utils';
 import type { Brand, StoredQuestion, Env } from '../../src/types';
 
 const mockEnv: Env = {
