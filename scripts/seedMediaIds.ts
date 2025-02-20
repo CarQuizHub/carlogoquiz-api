@@ -7,22 +7,43 @@ import fs from 'fs';
 const NAMESPACE_UUID = 'a614a22b-ead8-448b-9c5d-943c5389a707';
 
 /**
- * Reads brand names from stdin (passed by the shell script).
+ * Reads brand IDs and names from stdin (passed by the shell script).
  */
-async function readStdin(): Promise<string[]> {
+async function readStdin(): Promise<{ id: number; brand_name: string }[]> {
 	return new Promise((resolve) => {
 		let data = '';
 		process.stdin.on('data', (chunk) => (data += chunk));
 		process.stdin.on('end', () => {
 			try {
-				const jsonArray = JSON.parse(data.trim());
+				console.log('🔍 Raw JSON received from stdin:');
+				console.log(data.trim()); // Log raw JSON input for debugging
 
-				if (!Array.isArray(jsonArray) || jsonArray.length === 0 || !jsonArray[0].results) {
-					throw new Error('Invalid JSON format received.');
+				const parsedData = JSON.parse(data.trim());
+
+				// Ensure that parsedData is structured correctly
+				if (!Array.isArray(parsedData)) {
+					throw new Error('Expected an array, but got something else.');
 				}
 
-				const brandNames = jsonArray[0].results.map((brand: { brand_name: string }) => brand.brand_name);
-				resolve(brandNames);
+				// Extract the actual results array
+				const results = parsedData[0]?.results;
+
+				if (!Array.isArray(results) || results.length === 0) {
+					throw new Error('Invalid JSON format: Missing results array.');
+				}
+
+				// Extract `id` and `brand_name`
+				const brands = results
+					.map((brand) => {
+						if (typeof brand.id !== 'number' || typeof brand.brand_name !== 'string') {
+							console.error(`⚠️ Invalid brand object found:`, brand);
+							return null; // Skip invalid entries
+						}
+						return { id: brand.id, brand_name: brand.brand_name };
+					})
+					.filter(Boolean); // Remove null values
+
+				resolve(brands.filter((brand): brand is { id: number; brand_name: string } => brand !== null));
 			} catch (error) {
 				console.error('❌ Failed to parse JSON input:', error);
 				process.exit(1);
@@ -35,19 +56,20 @@ async function readStdin(): Promise<string[]> {
  * Generates UUIDs for brand names and outputs SQL queries.
  */
 async function generateMediaIdQueries() {
-	console.log('🔄 Reading brand names from input...');
+	console.log('🔄 Reading brand IDs from input...');
 	const brands = await readStdin();
 
 	if (brands.length === 0) {
-		console.error('❌ No brands found! Exiting...');
+		console.error('❌ No valid brands found! Exiting...');
 		process.exit(1);
 	}
 
-	console.log(`📌 Found ${brands.length} brands`);
+	console.log(`📌 Found ${brands.length} valid brands`);
+
 	const updateStatements = brands
-		.map((brand) => {
-			const mediaId = uuidv5(brand, NAMESPACE_UUID);
-			return `UPDATE brands SET media_id = '${mediaId}' WHERE brand_name = '${brand}';`;
+		.map(({ id, brand_name }) => {
+			const mediaId = uuidv5(brand_name, NAMESPACE_UUID);
+			return `UPDATE brands SET media_id = '${mediaId}' WHERE id = ${id};`;
 		})
 		.join('\n');
 

@@ -1,18 +1,18 @@
 import { DurableObject } from 'cloudflare:workers';
 import { createJsonResponse } from '../api/response';
-import { ApiErrorResponse, SessionData, Env } from '../types';
+import { ApiErrorResponse, SessionData, Bindings } from '../types';
 import { handleStartSession } from '../handlers/startSessionHandler';
 import { handleSubmitAnswer } from '../handlers/submitAnswerHandler';
 import { handleEndSession } from '../handlers/endSessionHandler';
 import { logInfo, logWarning } from '../utils/loggingUtils';
 
 export class Session extends DurableObject {
-	public env: Env;
+	public env: Bindings;
 	public state: DurableObjectState;
 	public sessionData: SessionData | null = null;
 	public sessionId: string;
 
-	constructor(state: DurableObjectState, env: Env) {
+	constructor(state: DurableObjectState, env: Bindings) {
 		super(state, env);
 		this.state = state;
 		this.env = env;

@@ -1,7 +1,7 @@
-import { Brand, Env } from '../types';
-import { logInfo, logError } from '../utils/loggingUtils';
+import { Brand, Bindings } from '../types';
+import { logInfo, logError } from '../utils';
 
-export async function fetchBrands(env: Env, sessionId: string): Promise<Brand[]> {
+export async function fetchBrands(env: Bindings, sessionId: string): Promise<Brand[]> {
 	const cacheKey = 'brands';
 	const cacheDuration = parseInt(env.BRANDS_CACHE_DURATION) || 604800; // Default to 1 week if not set
 
