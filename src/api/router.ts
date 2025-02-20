@@ -2,7 +2,8 @@ import { AutoRouter } from 'itty-router';
 import { CORS_HEADERS } from '../config/constants';
 import { createJsonResponse } from './response';
 import { JsonResponse } from '../types';
-import { logInfo, logWarning, logError } from '../utils/loggingUtils';
+import { logWarning, logError } from '../utils/loggingUtils';
+import { fetchWithRetries } from './fetchSession';
 
 const router = AutoRouter();
 
@@ -34,12 +35,7 @@ async function forwardSessionRequest(request: Request, env: any, createId: boole
 		const id = env.SESSION_DO.idFromString(sessionId);
 		const sessionObject = env.SESSION_DO.get(id);
 
-		return await sessionObject.fetch(
-			new Request(request.url, {
-				method: request.method,
-				body: request.body,
-			}),
-		);
+		return await fetchWithRetries(sessionObject, request, sessionId);
 	} catch (error) {
 		logError('session_error', 'unknown', error);
 		return createJsonResponse({ error: 'Failed to handle session' }, 500);
