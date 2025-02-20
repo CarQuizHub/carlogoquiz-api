@@ -1,7 +1,7 @@
 import { DurableObjectNamespace } from '@cloudflare/workers-types';
 import { Session } from '../durableObjects/session';
 
-export interface Env {
+export interface Bindings {
 	DB: D1Database;
 	BRANDS_KV: KVNamespace;
 	SESSION_DO: DurableObjectNamespace<Session>;

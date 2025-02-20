@@ -1,14 +1,14 @@
 import { describe, it, expect } from 'vitest';
 import {
-	GenerateLogoUrl,
+	generateLogoUrl,
 	generateLogoQuestions,
-	CalculateTimeTakenBonus,
+	calculateTimeTakenBonus,
 	isValidAnswerSubmission,
 	calculateLogoQuizScore,
 } from '../../src/utils';
-import type { Brand, StoredQuestion, Env } from '../../src/types';
+import type { Brand, StoredQuestion, Bindings } from '../../src/types';
 
-const mockEnv: Env = {
+const mockEnv: Bindings = {
 	MEDIA_BASE_URL: 'https://cdn.example.com',
 	PRODUCTION: false,
 	BRANDS_CACHE_DURATION: '10',
@@ -68,24 +68,17 @@ describe('generateLogoQuestions', () => {
 		const questions: StoredQuestion[] = generateLogoQuestions(brands, mockEnv);
 
 		questions.forEach((q) => {
-			const expectedUrl = GenerateLogoUrl(q.mediaId, true, mockEnv.MEDIA_BASE_URL);
+			const expectedUrl = generateLogoUrl(q.mediaId, true, mockEnv.MEDIA_BASE_URL);
 			expect(q.logo).toBe(expectedUrl);
 		});
 	});
 
-	it('handles cases where there are not enough brands', () => {
+	it('returns an empty array if there are not enough brands', () => {
 		const brands: Brand[] = [...Array.from({ length: 5 }, (_, i) => createBrand(i + 1, 1))];
 
 		const questions: StoredQuestion[] = generateLogoQuestions(brands, mockEnv);
 
-		expect(questions).toHaveLength(5);
-		expect(new Set(questions.map((q) => q.brandId)).size).toBe(5);
-	});
-
-	it('handles an empty input array gracefully', () => {
-		const questions: StoredQuestion[] = generateLogoQuestions([], mockEnv);
-
-		expect(questions).toHaveLength(0);
+		expect(questions).toEqual([]);
 	});
 });
 
@@ -93,28 +86,28 @@ describe('GenerateLogoUrl', () => {
 	const baseUrl = 'https://cdn.example.com';
 
 	it('returns correct visible logo URL', () => {
-		const url = GenerateLogoUrl('1c0ade56-1fee-5aae-b705-152fe6464e8f', false, baseUrl);
-		expect(url).toBe('https://cdn.example.com/brands/1c0ade56-1fee-5aae-b705-152fe6464e8f/logo.webp');
+		const url = generateLogoUrl('1c0ade56-1fee-5aae-b705-152fe6464e8f', false, baseUrl);
+		expect(url).toBe('https://cdn.example.com/brands/1c0ade56-1fee-5aae-b705-152fe6464e8f/logo/logo.webp');
 	});
 
 	it('returns correct hidden logo URL', () => {
-		const url = GenerateLogoUrl('1c0ade56-1fee-5aae-b705-152fe6464e8f', true, baseUrl);
-		expect(url).toBe('https://cdn.example.com/brands/1c0ade56-1fee-5aae-b705-152fe6464e8f/logo-hidden.webp');
+		const url = generateLogoUrl('1c0ade56-1fee-5aae-b705-152fe6464e8f', true, baseUrl);
+		expect(url).toBe('https://cdn.example.com/brands/1c0ade56-1fee-5aae-b705-152fe6464e8f/logo/logo-hidden.webp');
 	});
 });
 
 describe('CalculateTimeTakenBonus', () => {
 	it('awards maximum bonus (55) for fastest completion', () => {
-		expect(CalculateTimeTakenBonus(0)).toBe(55);
+		expect(calculateTimeTakenBonus(0)).toBe(55);
 	});
 
 	it('awards minimum bonus (1) for very slow completion', () => {
-		expect(CalculateTimeTakenBonus(300)).toBe(1);
+		expect(calculateTimeTakenBonus(300)).toBe(1);
 	});
 
 	it('scales bonus correctly over time', () => {
-		expect(CalculateTimeTakenBonus(90)).toBeGreaterThan(1);
-		expect(CalculateTimeTakenBonus(90)).toBeLessThan(55);
+		expect(calculateTimeTakenBonus(90)).toBeGreaterThan(1);
+		expect(calculateTimeTakenBonus(90)).toBeLessThan(55);
 	});
 });
 

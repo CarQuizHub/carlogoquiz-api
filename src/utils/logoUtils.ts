@@ -1,11 +1,11 @@
-import { Brand, StoredQuestion, Env } from '../types';
+import { Brand, StoredQuestion, Bindings } from '../types';
 
-export function GenerateLogoUrl(mediaId: string, isHidden: boolean, baseUrl: string): string {
+export const generateLogoUrl = (mediaId: string, isHidden: boolean, baseUrl: string): string => {
 	const imageType = isHidden ? 'logo-hidden' : 'logo';
 	return `${baseUrl}/brands/${mediaId}/logo/${imageType}.webp`;
-}
+};
 
-export function generateLogoQuestions(brands: Brand[], env: Env): StoredQuestion[] {
+export const generateLogoQuestions = (brands: Brand[], env: Bindings): StoredQuestion[] => {
 	const baseUrl = env.MEDIA_BASE_URL;
 	const easyPoolNumber = 9;
 	const hardPoolDifficultyOrder = [3, 3, 3, 4, 4, 5];
@@ -20,26 +20,36 @@ export function generateLogoQuestions(brands: Brand[], env: Env): StoredQuestion
 	const easyBrands = getRandomElements((groupedBrands[1] || []).concat(groupedBrands[2] || []), easyPoolNumber);
 	easyBrands.forEach((b) => selectedIds.add(b.id));
 
-	const remainingQuestions = hardPoolDifficultyOrder.map((difficulty) => {
-		const pool = (groupedBrands[difficulty] || []).filter((b) => !selectedIds.has(b.id));
-		const brand = getRandomElements(pool, 1)[0];
-		if (brand) selectedIds.add(brand.id);
-		return brand;
-	});
+	const remainingQuestions = hardPoolDifficultyOrder
+		.map((difficulty) => {
+			const pool = (groupedBrands[difficulty] || []).filter((b) => !selectedIds.has(b.id));
+			const brand = getRandomElements(pool, 1)[0];
+			if (brand) {
+				selectedIds.add(brand.id);
+				return brand;
+			}
+			return null;
+		})
+		.filter(Boolean);
 
-	return [...easyBrands, ...remainingQuestions].map((brand) => ({
-		brandId: brand.id,
-		difficulty: brand.difficulty,
-		mediaId: brand.media_id,
-		logo: GenerateLogoUrl(brand.media_id, true, baseUrl),
+	const questions = [...easyBrands, ...remainingQuestions];
+	if (questions.length !== easyPoolNumber + hardPoolDifficultyOrder.length) {
+		return [];
+	}
+
+	return questions.map((brand) => ({
+		brandId: brand!.id,
+		difficulty: brand!.difficulty,
+		mediaId: brand!.media_id,
+		logo: generateLogoUrl(brand!.media_id, true, baseUrl),
 	}));
-}
+};
 
-export function calculateLogoQuizScore(difficulty: number): number {
+export const calculateLogoQuizScore = (difficulty: number): number => {
 	return difficulty <= 2 ? 1 : difficulty;
-}
+};
 
-function getRandomElements<T>(array: T[], count: number): T[] {
+const getRandomElements = <T>(array: T[], count: number): T[] => {
 	if (array.length <= count) return [...array];
 
 	const shuffled = [...array];
@@ -48,4 +58,4 @@ function getRandomElements<T>(array: T[], count: number): T[] {
 		[shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
 	}
 	return shuffled.slice(0, count);
-}
+};

@@ -1,12 +1,12 @@
 import { Session } from './durableObjects/session';
 import router from './api/router';
-import { Env, ApiErrorResponse } from './types';
+import { Bindings, ApiErrorResponse } from './types';
 import { createJsonResponse } from './api/response';
 
 export { Session };
 
 export default {
-	fetch: (request: Request, env: Env, ctx: ExecutionContext) =>
+	fetch: (request: Request, env: Bindings, ctx: ExecutionContext) =>
 		router.fetch(request, env, ctx).catch((err) => {
 			const sessionId = request.headers.get('session_id') || 'unknown_session';
 

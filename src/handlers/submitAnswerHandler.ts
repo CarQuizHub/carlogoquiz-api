@@ -3,8 +3,8 @@ import { ApiErrorResponse, ApiSubmitAnswerResponse } from '../types';
 import { Session } from '../durableObjects/session';
 import {
 	calculateLogoQuizScore,
-	GenerateLogoUrl,
-	CalculateTimeTakenBonus,
+	generateLogoUrl,
+	calculateTimeTakenBonus,
 	isValidAnswerSubmission,
 	logInfo,
 	logWarning,
@@ -47,10 +47,10 @@ export async function handleSubmitAnswer(session: Session, request: Request): Pr
 		session.sessionData.lives -= isCorrect ? 0 : 1;
 		session.sessionData.currentQuestion += isCorrect ? 1 : 0;
 
-		// If this was the final question, apply bonus (if any) and then complete the session.
+		// If this was the final question and was correct, apply bonus and then complete the session.
 		if (isCorrect && session.sessionData.currentQuestion === Object.keys(session.sessionData.questions).length) {
 			if (timeTaken && timeTaken > 0) {
-				const bonusScore = CalculateTimeTakenBonus(timeTaken);
+				const bonusScore = calculateTimeTakenBonus(timeTaken);
 				session.sessionData.score += bonusScore;
 				logInfo('answer_bonus_score_added', session.sessionId, { timeTaken, bonusScore });
 			}
@@ -61,7 +61,7 @@ export async function handleSubmitAnswer(session: Session, request: Request): Pr
 					isCorrect,
 					lives: session.sessionData.lives,
 					score: session.sessionData.score,
-					logo: GenerateLogoUrl(correctAnswer.mediaId, !isCorrect, session.env.MEDIA_BASE_URL),
+					logo: generateLogoUrl(correctAnswer.mediaId, !isCorrect, session.env.MEDIA_BASE_URL),
 				},
 				200,
 			);
@@ -78,7 +78,7 @@ export async function handleSubmitAnswer(session: Session, request: Request): Pr
 				isCorrect,
 				lives: session.sessionData.lives,
 				score: session.sessionData.score,
-				logo: GenerateLogoUrl(correctAnswer.mediaId, !isCorrect, session.env.MEDIA_BASE_URL),
+				logo: generateLogoUrl(correctAnswer.mediaId, !isCorrect, session.env.MEDIA_BASE_URL),
 			},
 			200,
 		);

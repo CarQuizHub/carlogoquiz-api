@@ -1,13 +1,14 @@
 import { createJsonResponse } from '../api/response';
 import { fetchBrands } from '../repositories/brandRepository';
-import { generateLogoQuestions, logInfo, logWarning, logError } from '../utils/';
+import { logInfo, logWarning, logError } from '../utils/';
+import * as LogoUtils from '../../src/utils/logoUtils';
 import { Session } from '../durableObjects/session';
-import { ApiErrorResponse, ApiStartSessionResponse, Brand, StoredQuestion, Env } from '../types';
+import { ApiErrorResponse, ApiStartSessionResponse, Brand, StoredQuestion, Bindings } from '../types';
 
 /**
  * Starts or restores a session.
  */
-export async function handleStartSession(session: Session, env: Env): Promise<Response> {
+export const handleStartSession = async (session: Session, env: Bindings): Promise<Response> => {
 	try {
 		const brands: Brand[] = await fetchBrands(env, session.sessionId);
 		if (brands.length === 0) {
@@ -28,8 +29,12 @@ export async function handleStartSession(session: Session, env: Env): Promise<Re
 			);
 		}
 
-		// Otherwise, start a new session
-		const storedQuestions: StoredQuestion[] = generateLogoQuestions(brands, env);
+		const storedQuestions: StoredQuestion[] = LogoUtils.generateLogoQuestions(brands, env);
+		if (storedQuestions.length === 0) {
+			logWarning('session_start_no_questions', session.sessionId);
+			return createJsonResponse<ApiErrorResponse>({ error: 'No questions available' }, 400);
+		}
+
 		session.sessionData = {
 			score: 0,
 			questions: Object.fromEntries(storedQuestions.map((q, index) => [index, q])),
@@ -37,7 +42,7 @@ export async function handleStartSession(session: Session, env: Env): Promise<Re
 			currentQuestion: 0,
 		};
 		await session.state.storage.put(`session-${session.sessionId}`, session.sessionData);
-		logInfo('session_started', session.sessionId, { sessionData: session.sessionData });
+		logInfo('session_started', session.sessionId, { sessionData: JSON.stringify(session.sessionData, null, 2) });
 
 		return createJsonResponse<ApiStartSessionResponse>(
 			{
@@ -51,4 +56,4 @@ export async function handleStartSession(session: Session, env: Env): Promise<Re
 		logError('session_start_error', session.sessionId, error);
 		return createJsonResponse<ApiErrorResponse>({ error: 'Error: Failed to start session' }, 500);
 	}
-}
+};
