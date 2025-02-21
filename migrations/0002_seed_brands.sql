@@ -1,7 +1,3 @@
--- 0002_seed_brands.sql
--- Seed data for the logo quiz.
-
--- Seed data for the countries table.
 INSERT INTO countries (id, country_name) VALUES
 (1, 'Italy'),
 (2, 'Japan'),
@@ -22,7 +18,6 @@ INSERT INTO countries (id, country_name) VALUES
 (17, 'Vietnam'),
 (18, 'Denmark');
 
--- Seed data for the brands table.
 INSERT INTO brands (brand_name, difficulty, country_id) VALUES
 ('Abarth', 4, 1),
 ('Acura', 4, 2),

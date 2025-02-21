@@ -27,15 +27,15 @@ echo "✅ Wrangler Dev is running!"
 # Check if `0003_update_media_ids.sql` exists
 MEDIA_ID_FILE="./migrations/0003_update_media_ids.sql"
 if [ ! -f "$MEDIA_ID_FILE" ]; then
-    echo "🔄 0003_update_media_ids.sql not found. Generating media_id values..."
+    echo "0003_update_media_ids.sql not found. Generating media_id values..."
 
     # Fetch brand names and pass them to the TypeScript script
-    echo "📥 Fetching brand names from the database..."
+    echo "Fetching brand names from the database..."
     BRANDS_JSON=$(wrangler d1 execute DB --local --env dev --command "SELECT id, brand_name FROM brands;" --json)
     sleep 1
 
     # Generate UUIDs for media_id using brand names
-    echo "🔄 Generating UUIDs for media_id..."
+    echo "Generating UUIDs for media_id..."
     echo "$BRANDS_JSON" | npx tsx ./scripts/seedMediaIds.ts
     sleep 3
 else
@@ -44,9 +44,9 @@ fi
 
 
 # Run database migrations (ensuring the local database is ready)
-echo "🛠️ Running database migrations locally..."
+echo "Running database migrations locally..."
 wrangler d1 migrations apply DB --local --env dev
-sleep 5
+sleep 1
 
 # Verify if any brands are missing a media_id
 echo "Verifying database setup..."

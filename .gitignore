@@ -140,3 +140,5 @@ worker-configuration.d.ts
 
 # Ignore local assets folder (since assets are stored in R2)
 assets/
+migrations/migrations.ts
+migrations/0003_update_media_ids.sql
