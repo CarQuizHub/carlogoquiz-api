@@ -1,6 +1,9 @@
-// tests/setup.ts
-import applyMigrations from './apply-migrations';
+import { applyD1Migrations, env } from 'cloudflare:test';
+import { beforeAll } from 'vitest';
 
-export default async function setup() {
-	await applyMigrations();
-}
+beforeAll(async () => {
+	if (!env.DB) {
+		throw new Error('D1Database binding (DB) is not available in the test environment.');
+	}
+	await applyD1Migrations(env.DB, env.TEST_MIGRATIONS);
+});
