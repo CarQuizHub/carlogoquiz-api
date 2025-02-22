@@ -9,7 +9,7 @@ export default defineWorkersConfig(async () => {
 	return {
 		test: {
 			globals: true,
-			setupFiles: ['./setup.ts'], // Runs migrations before tests
+			setupFiles: [path.resolve(__dirname, './setup.ts')],
 			poolOptions: {
 				workers: {
 					singleWorker: true,
