@@ -1,45 +1,34 @@
-import { AutoRouter } from 'itty-router';
-import { CORS_HEADERS } from '../config/constants';
-import { createJsonResponse } from './response';
-import { JsonResponse } from '../types';
-import { logWarning, logError } from '../utils/loggingUtils';
-import { fetchWithRetries } from './fetchSession';
+import { Hono } from 'hono';
+import { cors } from 'hono/cors';
+import { Bindings } from '../types';
+import { CORS_OPTIONS } from '../config/constants';
+import { createJsonResponse } from '../api/response';
+import { logError } from '../utils/loggingUtils';
+import { handleSessionDurableObject } from '../handlers/durableObjectHandler';
 
-const router = AutoRouter();
+const app = new Hono<{ Bindings: Bindings }>();
 
-router.options(
-	'*',
-	() =>
-		new Response(null, {
-			status: 204,
-			headers: CORS_HEADERS,
-		}),
-);
+app.use('*', cors(CORS_OPTIONS));
 
-router.get('/session/start', async (request, env) => forwardSessionRequest(request, env, true));
-router.post('/session/*', async (request, env) => forwardSessionRequest(request, env, false));
+app.onError((err, c) => {
+	const sessionId = c.req.header('session_id') || 'unknown_session';
+	logError('session_error', sessionId, err);
+	return createJsonResponse({ error: 'Internal Server Error' }, 500);
+});
 
-async function forwardSessionRequest(request: Request, env: any, createId: boolean): Promise<JsonResponse<Response>> {
-	try {
-		let sessionId = request.headers.get('session_id');
-		if (!sessionId && createId) {
-			const id = env.SESSION_DO.newUniqueId();
-			sessionId = id.toString();
-		}
+// Route to start a session.
+app.get('/session/start', async (c) => {
+	return await handleSessionDurableObject(c, true, (stub) => stub.startSession());
+});
 
-		if (!sessionId) {
-			logWarning('session_missing_id', 'unknown');
-			return createJsonResponse({ error: 'Missing session ID' }, 400);
-		}
+// Route to end a session.
+app.get('/session/end', async (c) => {
+	return await handleSessionDurableObject(c, false, (stub) => stub.endSession());
+});
 
-		const id = env.SESSION_DO.idFromString(sessionId);
-		const sessionObject = env.SESSION_DO.get(id);
+// Route to submit answer to a question stored in session.
+app.post('/session/answer', async (c) => {
+	return await handleSessionDurableObject(c, false, (stub) => stub.submitAnswer(c.req.raw));
+});
 
-		return await fetchWithRetries(sessionObject, request, sessionId);
-	} catch (error) {
-		logError('session_error', 'unknown', error);
-		return createJsonResponse({ error: 'Failed to handle session' }, 500);
-	}
-}
-
-export default { ...router };
+export default app;

@@ -1,4 +1,4 @@
-import { Brand, Bindings } from '../types';
+import { Bindings, Brand } from '../types';
 import { logInfo, logError } from '../utils';
 
 export async function fetchBrands(env: Bindings, sessionId: string): Promise<Brand[]> {
