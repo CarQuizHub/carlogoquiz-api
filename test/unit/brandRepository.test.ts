@@ -19,7 +19,7 @@ const MOCK_ENV: Bindings = {
 	DB: {
 		prepare: vi.fn(),
 	} as unknown as D1Database,
-	SESSION_DO: {} as any,
+	SESSION: {} as any,
 };
 
 describe('fetchBrands', () => {

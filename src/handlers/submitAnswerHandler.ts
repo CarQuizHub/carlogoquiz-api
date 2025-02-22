@@ -14,7 +14,7 @@ import {
 /**
  * Processes an answer submission.
  */
-export async function handleSubmitAnswer(session: Session, request: Request): Promise<Response> {
+export async function handleSubmitAnswer(session: Session, request: Request, baseUrl: string): Promise<Response> {
 	try {
 		if (!session.sessionData) {
 			logWarning('answer_submission_no_session', session.sessionId);
@@ -61,7 +61,7 @@ export async function handleSubmitAnswer(session: Session, request: Request): Pr
 					isCorrect,
 					lives: session.sessionData.lives,
 					score: session.sessionData.score,
-					logo: generateLogoUrl(correctAnswer.mediaId, !isCorrect, session.env.MEDIA_BASE_URL),
+					logo: generateLogoUrl(correctAnswer.mediaId, !isCorrect, baseUrl),
 				},
 				200,
 			);
@@ -78,7 +78,7 @@ export async function handleSubmitAnswer(session: Session, request: Request): Pr
 				isCorrect,
 				lives: session.sessionData.lives,
 				score: session.sessionData.score,
-				logo: generateLogoUrl(correctAnswer.mediaId, !isCorrect, session.env.MEDIA_BASE_URL),
+				logo: generateLogoUrl(correctAnswer.mediaId, !isCorrect, baseUrl),
 			},
 			200,
 		);

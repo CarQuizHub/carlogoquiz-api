@@ -1,22 +1,21 @@
 import { DurableObject } from 'cloudflare:workers';
-import { createJsonResponse } from '../api/response';
-import { ApiErrorResponse, SessionData, Bindings } from '../types';
+import { SessionData, Bindings } from '../types';
 import { handleStartSession } from '../handlers/startSessionHandler';
 import { handleSubmitAnswer } from '../handlers/submitAnswerHandler';
 import { handleEndSession } from '../handlers/endSessionHandler';
-import { logInfo, logWarning } from '../utils/loggingUtils';
+import { logInfo } from '../utils/loggingUtils';
 
 export class Session extends DurableObject {
-	public env: Bindings;
 	public state: DurableObjectState;
 	public sessionData: SessionData | null = null;
 	public sessionId: string;
+	public env: Bindings;
 
 	constructor(state: DurableObjectState, env: Bindings) {
 		super(state, env);
 		this.state = state;
-		this.env = env;
 		this.sessionId = this.state.id.toString();
+		this.env = env;
 
 		// Initialize or restore session state
 		state.blockConcurrencyWhile(async () => {
@@ -31,21 +30,18 @@ export class Session extends DurableObject {
 		});
 	}
 
-	async fetch(request: Request): Promise<Response> {
-		const url = new URL(request.url);
-		switch (url.pathname) {
-			case '/session/start':
-				logInfo('session_start_request', this.sessionId);
-				return handleStartSession(this, this.env);
-			case '/session/answer':
-				logInfo('session_answer_request', this.sessionId);
-				return handleSubmitAnswer(this, request);
-			case '/session/end':
-				logInfo('session_end_request', this.sessionId);
-				return handleEndSession(this);
-			default:
-				logWarning('unknown_route', this.sessionId, { path: url.pathname });
-				return createJsonResponse<ApiErrorResponse>({ error: 'Not Found' }, 404);
-		}
+	async startSession(): Promise<Response> {
+		logInfo('session_start_request', this.sessionId);
+		return handleStartSession(this, this.env);
+	}
+
+	async submitAnswer(request: Request): Promise<Response> {
+		logInfo('session_answer_request', this.sessionId);
+		return handleSubmitAnswer(this, request, this.env.MEDIA_BASE_URL);
+	}
+
+	async endSession(): Promise<Response> {
+		logInfo('session_end_request', this.sessionId);
+		return handleEndSession(this);
 	}
 }

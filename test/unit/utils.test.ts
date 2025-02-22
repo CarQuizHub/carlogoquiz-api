@@ -8,14 +8,7 @@ import {
 } from '../../src/utils';
 import type { Brand, StoredQuestion, Bindings } from '../../src/types';
 
-const mockEnv: Bindings = {
-	MEDIA_BASE_URL: 'https://cdn.example.com',
-	PRODUCTION: false,
-	BRANDS_CACHE_DURATION: '10',
-	DB: {} as any,
-	BRANDS_KV: {} as any,
-	SESSION_DO: {} as any,
-};
+const MEDIA_BASE_URL = 'https://cdn.example.com';
 
 const createBrand = (id: number, difficulty: number): Brand => ({
 	id,
@@ -34,13 +27,13 @@ const brands: Brand[] = [
 
 describe('generateLogoQuestions', () => {
 	it('returns exactly 15 questions', () => {
-		const questions: StoredQuestion[] = generateLogoQuestions(brands, mockEnv);
+		const questions: StoredQuestion[] = generateLogoQuestions(brands, MEDIA_BASE_URL);
 
 		expect(questions).toHaveLength(15);
 	});
 
 	it('ensures all selected questions have unique brand IDs', () => {
-		const questions: StoredQuestion[] = generateLogoQuestions(brands, mockEnv);
+		const questions: StoredQuestion[] = generateLogoQuestions(brands, MEDIA_BASE_URL);
 		const brandIds = questions.map((q) => q.brandId);
 		const uniqueBrandIds = new Set(brandIds);
 
@@ -48,7 +41,7 @@ describe('generateLogoQuestions', () => {
 	});
 
 	it('ensures difficulty distribution follows the rules', () => {
-		const questions: StoredQuestion[] = generateLogoQuestions(brands, mockEnv);
+		const questions: StoredQuestion[] = generateLogoQuestions(brands, MEDIA_BASE_URL);
 
 		const difficultyCounts = questions.reduce(
 			(acc, q) => {
@@ -65,10 +58,10 @@ describe('generateLogoQuestions', () => {
 	});
 
 	it('returns correct logo URLs for each brand', () => {
-		const questions: StoredQuestion[] = generateLogoQuestions(brands, mockEnv);
+		const questions: StoredQuestion[] = generateLogoQuestions(brands, MEDIA_BASE_URL);
 
 		questions.forEach((q) => {
-			const expectedUrl = generateLogoUrl(q.mediaId, true, mockEnv.MEDIA_BASE_URL);
+			const expectedUrl = generateLogoUrl(q.mediaId, true, MEDIA_BASE_URL);
 			expect(q.logo).toBe(expectedUrl);
 		});
 	});
@@ -76,7 +69,7 @@ describe('generateLogoQuestions', () => {
 	it('returns an empty array if there are not enough brands', () => {
 		const brands: Brand[] = [...Array.from({ length: 5 }, (_, i) => createBrand(i + 1, 1))];
 
-		const questions: StoredQuestion[] = generateLogoQuestions(brands, mockEnv);
+		const questions: StoredQuestion[] = generateLogoQuestions(brands, MEDIA_BASE_URL);
 
 		expect(questions).toEqual([]);
 	});
