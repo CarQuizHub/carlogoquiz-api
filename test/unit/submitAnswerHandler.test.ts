@@ -16,12 +16,13 @@ describe('handleSubmitAnswer', () => {
 	let fakeSession: any;
 	let fakeEnv: Bindings;
 	let mockRequest: any;
+	const MEDIA_BASE_URL = 'https://cdn.example.com';
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 
 		fakeEnv = {
-			MEDIA_BASE_URL: 'https://cdn.example.com',
+			MEDIA_BASE_URL: MEDIA_BASE_URL,
 			PRODUCTION: false,
 		} as any;
 
@@ -48,7 +49,7 @@ describe('handleSubmitAnswer', () => {
 
 	const testSubmitAnswer = async (body: any, expectedStatus: number, expectedData: any) => {
 		mockRequest = { json: vi.fn().mockResolvedValue(body) } as any;
-		const response = await handleSubmitAnswer(fakeSession, mockRequest);
+		const response = await handleSubmitAnswer(fakeSession, mockRequest, MEDIA_BASE_URL);
 		const data = await response.json();
 		expect(response.status).toBe(expectedStatus);
 		expect(data).toEqual(expectedData);
@@ -118,7 +119,7 @@ describe('handleSubmitAnswer', () => {
 	it('handles unexpected errors gracefully', async () => {
 		mockRequest = { json: vi.fn().mockRejectedValue(new Error('Unexpected error')) } as any;
 
-		const response = await handleSubmitAnswer(fakeSession, mockRequest);
+		const response = await handleSubmitAnswer(fakeSession, mockRequest, MEDIA_BASE_URL);
 		const data = await response.json();
 
 		expect(response.status).toBe(500);

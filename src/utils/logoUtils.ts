@@ -5,8 +5,7 @@ export const generateLogoUrl = (mediaId: string, isHidden: boolean, baseUrl: str
 	return `${baseUrl}/brands/${mediaId}/logo/${imageType}.webp`;
 };
 
-export const generateLogoQuestions = (brands: Brand[], env: Bindings): StoredQuestion[] => {
-	const baseUrl = env.MEDIA_BASE_URL;
+export const generateLogoQuestions = (brands: Brand[], baseUrl: string): StoredQuestion[] => {
 	const easyPoolNumber = 9;
 	const hardPoolDifficultyOrder = [3, 3, 3, 4, 4, 5];
 

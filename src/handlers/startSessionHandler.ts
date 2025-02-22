@@ -29,7 +29,7 @@ export const handleStartSession = async (session: Session, env: Bindings): Promi
 			);
 		}
 
-		const storedQuestions: StoredQuestion[] = LogoUtils.generateLogoQuestions(brands, env);
+		const storedQuestions: StoredQuestion[] = LogoUtils.generateLogoQuestions(brands, env.MEDIA_BASE_URL);
 		if (storedQuestions.length === 0) {
 			logWarning('session_start_no_questions', session.sessionId);
 			return createJsonResponse<ApiErrorResponse>({ error: 'No questions available' }, 400);

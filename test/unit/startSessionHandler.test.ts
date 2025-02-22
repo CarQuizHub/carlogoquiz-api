@@ -37,7 +37,7 @@ describe('handleStartSession', () => {
 			DB: {
 				prepare: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: mockBrands }) })),
 			} as any,
-			SESSION_DO: {} as any,
+			SESSION: {} as any,
 		};
 
 		fakeSession = {

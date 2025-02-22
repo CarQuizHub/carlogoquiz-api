@@ -13,7 +13,7 @@
 	"durable_objects": {
 		"bindings": [
 			{
-				"name": "SESSION_DO",
+				"name": "SESSION",
 				"class_name": "Session"
 			}
 		]
@@ -36,7 +36,7 @@
 			"durable_objects": {
 				"bindings": [
 					{
-						"name": "SESSION_DO",
+						"name": "SESSION",
 						"class_name": "Session"
 					}
 				]
@@ -68,7 +68,7 @@
 			"durable_objects": {
 				"bindings": [
 					{
-						"name": "SESSION_DO",
+						"name": "SESSION",
 						"class_name": "Session"
 					}
 				]
