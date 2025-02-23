@@ -1,5 +1,5 @@
 name: 'Common Setup'
-description: 'Checkout repository, setup Node.js, restore cache, and install dependencies'
+description: 'Setup Node.js, restore cache, and install dependencies'
 inputs:
   node-version:
     description: 'Node.js version to use'
@@ -8,9 +8,6 @@ inputs:
 runs:
   using: 'composite'
   steps:
-    - name: Checkout repository
-      uses: actions/checkout@v4
-
     - name: Setup Node.js
       uses: actions/setup-node@v4
       with:
