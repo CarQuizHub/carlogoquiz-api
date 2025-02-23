@@ -23,7 +23,7 @@ export default defineWorkersConfig(async () => {
 							DB: ':memory:',
 						},
 						bindings: {
-							TEST_MIGRATIONS: migrations, // Inject migration SQL
+							TEST_MIGRATIONS: migrations,
 						},
 					},
 				},
