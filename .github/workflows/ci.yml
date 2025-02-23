@@ -19,6 +19,7 @@ jobs:
           node-version: '20'
       - name: Run Unit Tests
         run: npm run test:unit
+        shell: bash
 
   acceptance-tests:
     name: 'Run Acceptance Tests'
@@ -32,3 +33,4 @@ jobs:
           node-version: '20'
       - name: Run Acceptance Tests
         run: npm run test:acceptance
+        shell: bash
