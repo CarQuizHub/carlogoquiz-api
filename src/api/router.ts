@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { Bindings } from '../types';
+import { Bindings, AnswerRequest } from '../types';
 import { CORS_OPTIONS } from '../config/constants';
 import { createJsonResponse } from '../api/response';
 import { logError } from '../utils/loggingUtils';
@@ -28,7 +28,8 @@ app.get('/session/end', async (c) => {
 
 // Route to submit answer to a question stored in session.
 app.post('/session/answer', async (c) => {
-	return await handleSessionDurableObject(c, false, (stub) => stub.submitAnswer(c.req.raw));
+	const body = await c.req.json<AnswerRequest>();
+	return await handleSessionDurableObject(c, false, (stub) => stub.submitAnswer(body));
 });
 
 export default app;

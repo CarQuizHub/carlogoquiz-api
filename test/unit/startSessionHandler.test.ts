@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleStartSession } from '../../src/handlers/startSessionHandler';
 import { fetchBrands } from '../../src/repositories/brandRepository';
 import * as LogoUtils from '../../src/utils/logoUtils';
-import type { StoredQuestion, SessionData, Brand, Bindings, ApiStartSessionResponse } from '../../src/types';
+import type { StoredQuestion, SessionData, Brand, Bindings } from '../../src/types';
+import { SessionErrorCode } from '../../src/types';
 
 vi.mock('../../src/repositories/brandRepository', () => ({ fetchBrands: vi.fn() }));
 vi.mock('../../src/utils/logoUtils', () => ({ generateLogoQuestions: vi.fn() }));
@@ -47,21 +48,18 @@ describe('handleStartSession', () => {
 		} as any;
 	});
 
-	const testStartSession = async (expectedStatus: number, expectedData: any) => {
-		const response = await handleStartSession(fakeSession, fakeEnv);
-		const data = await response.json();
-		expect(response.status).toBe(expectedStatus);
-		expect(data).toEqual(expectedData);
-	};
-
 	it('starts a new session successfully', async () => {
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 		(LogoUtils.generateLogoQuestions as any).mockReturnValue(mockQuestions);
 
-		await testStartSession(200, {
-			brands: mockBrands.map(({ id, brand_name }) => ({ id, brand_name })),
-			questions: mockQuestions.map(({ logo }) => ({ question: { logo } })),
-		});
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.sessionId).toBe('test-session');
+			expect(result.data.brands).toEqual(mockBrands.map(({ id, brand_name }) => ({ id, brand_name })));
+			expect(result.data.questions).toEqual(mockQuestions.map(({ logo }) => ({ question: { logo } })));
+		}
 
 		expect(fakeSession.state.storage.put).toHaveBeenCalledWith(
 			`session-${fakeSession.sessionId}`,
@@ -81,25 +79,50 @@ describe('handleStartSession', () => {
 
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 
-		await testStartSession(200, {
-			brands: mockBrands.map(({ id, brand_name }) => ({ id, brand_name })),
-			questions: [{ question: { logo: 'logo1.png' } }],
-		});
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.sessionId).toBe('test-session');
+			expect(result.data.brands).toEqual(mockBrands.map(({ id, brand_name }) => ({ id, brand_name })));
+			expect(result.data.questions).toEqual([{ question: { logo: 'logo1.png' } }]);
+		}
 	});
 
 	it('returns an error when no brands are available', async () => {
 		(fetchBrands as any).mockResolvedValue([]);
-		await testStartSession(400, { error: 'No brands available' });
+
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe(SessionErrorCode.NO_BRANDS_AVAILABLE);
+			expect(result.error.message).toBe('No brands available');
+		}
 	});
 
 	it('returns an error when no questions are generated', async () => {
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 		(LogoUtils.generateLogoQuestions as any).mockReturnValue([]);
-		await testStartSession(400, { error: 'No questions available' });
+
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe(SessionErrorCode.NO_QUESTIONS_AVAILABLE);
+			expect(result.error.message).toBe('No questions available');
+		}
 	});
 
 	it('handles unexpected errors gracefully', async () => {
 		(fetchBrands as any).mockRejectedValue(new Error('Database failure'));
-		await testStartSession(500, { error: 'Error: Failed to start session' });
+
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe(SessionErrorCode.INTERNAL_ERROR);
+			expect(result.error.message).toBe('Failed to start session');
+		}
 	});
 });

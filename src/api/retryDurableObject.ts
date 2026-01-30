@@ -1,17 +1,17 @@
-import { createJsonResponse } from './response';
 import { logWarning, logError } from '../utils';
+import { Result, SessionErrorCode } from '../types';
 
 /**
  * Calls a stub function with retry logic and error handling.
- * @returns The resolved value of the stub function or a JSON error response.
+ * @returns The resolved Result value of the stub function or an error Result.
  */
 export async function retryDurableObject<T>(
-	fn: () => Promise<T>,
+	fn: () => Promise<Result<T>>,
 	sessionId: string = 'unknown',
 	maxAttempts: number = 3,
 	baseBackoffMs: number = 100,
 	maxBackoffMs: number = 2000,
-): Promise<T> {
+): Promise<Result<T>> {
 	let attempt = 0;
 
 	while (true) {
@@ -21,13 +21,19 @@ export async function retryDurableObject<T>(
 			// Check if the error is non-retryable.
 			if (!error.retryable) {
 				logError('session_error', sessionId, error);
-				return createJsonResponse({ error: 'Failed to handle session' }, 500) as unknown as T;
+				return {
+					success: false,
+					error: { code: SessionErrorCode.INTERNAL_ERROR, message: 'Failed to handle session' },
+				};
 			}
 
 			// Check if the error indicates an overloaded service.
 			if (error.overloaded) {
 				logWarning('session_overloaded', sessionId);
-				return createJsonResponse({ error: 'Service is overloaded. Try again later.' }, 503) as unknown as T;
+				return {
+					success: false,
+					error: { code: SessionErrorCode.INTERNAL_ERROR, message: 'Service is overloaded. Try again later.' },
+				};
 			}
 
 			// Calculate exponential backoff.
@@ -37,7 +43,10 @@ export async function retryDurableObject<T>(
 			// If we've exceeded the max attempts, log and return an error.
 			if (attempt >= maxAttempts) {
 				logError('session_max_retries_exceeded', sessionId, error);
-				return createJsonResponse({ error: 'Service unavailable. Please try again later.' }, 503) as unknown as T;
+				return {
+					success: false,
+					error: { code: SessionErrorCode.INTERNAL_ERROR, message: 'Service unavailable. Please try again later.' },
+				};
 			}
 
 			logWarning('session_retrying', sessionId, { attempt, backoffMs });

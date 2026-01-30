@@ -1,5 +1,4 @@
-import { createJsonResponse } from '../api/response';
-import { ApiErrorResponse, ApiSubmitAnswerResponse } from '../types';
+import { AnswerRequest, SubmitAnswerResult, SessionErrorCode } from '../types';
 import { Session } from '../durableObjects/session';
 import {
 	calculateLogoQuizScore,
@@ -14,29 +13,44 @@ import {
 /**
  * Processes an answer submission.
  */
-export async function handleSubmitAnswer(session: Session, request: Request, baseUrl: string): Promise<Response> {
+export async function handleSubmitAnswer(
+	session: Session,
+	answerData: AnswerRequest,
+	baseUrl: string,
+): Promise<SubmitAnswerResult> {
 	try {
 		if (!session.sessionData) {
 			logWarning('answer_submission_no_session', session.sessionId);
-			return createJsonResponse<ApiErrorResponse>({ error: 'No active session' }, 400);
+			return {
+				success: false,
+				error: { code: SessionErrorCode.NO_ACTIVE_SESSION, message: 'No active session' },
+			};
 		} else if (session.sessionData.lives <= 0) {
 			logWarning('answer_submission_game_over', session.sessionId);
-			return createJsonResponse<ApiErrorResponse>({ error: 'Game over' }, 400);
+			return {
+				success: false,
+				error: { code: SessionErrorCode.GAME_OVER, message: 'Game over' },
+			};
 		}
 
-		const body = await request.json();
-		if (!isValidAnswerSubmission(body)) {
+		if (!isValidAnswerSubmission(answerData)) {
 			logWarning('answer_submission_invalid_format', session.sessionId);
-			return createJsonResponse<ApiErrorResponse>({ error: 'Invalid input format' }, 400);
+			return {
+				success: false,
+				error: { code: SessionErrorCode.INVALID_INPUT_FORMAT, message: 'Invalid input format' },
+			};
 		}
 
-		const { questionNumber, brandId, timeTaken } = body;
+		const { questionNumber, brandId, timeTaken } = answerData;
 		if (!session.sessionData.questions[questionNumber] || session.sessionData.currentQuestion !== questionNumber) {
 			logWarning('answer_submission_invalid_question', session.sessionId, {
 				currentQuestion: session.sessionData.currentQuestion,
 				questionNumber,
 			});
-			return createJsonResponse<ApiErrorResponse>({ error: 'Invalid question number' }, 400);
+			return {
+				success: false,
+				error: { code: SessionErrorCode.INVALID_QUESTION_NUMBER, message: 'Invalid question number' },
+			};
 		}
 
 		const correctAnswer = session.sessionData.questions[questionNumber];
@@ -56,34 +70,37 @@ export async function handleSubmitAnswer(session: Session, request: Request, bas
 			}
 
 			logInfo('answer_session_completed', session.sessionId, { finalScore: session.sessionData.score });
-			const response = createJsonResponse<ApiSubmitAnswerResponse>(
-				{
+			const result: SubmitAnswerResult = {
+				success: true,
+				data: {
 					isCorrect,
 					lives: session.sessionData.lives,
 					score: session.sessionData.score,
 					logo: generateLogoUrl(correctAnswer.mediaId, !isCorrect, baseUrl),
 				},
-				200,
-			);
+			};
 			session.sessionData = null;
 			await session.state.storage.deleteAll();
-			return response;
+			return result;
 		}
 
 		await session.state.storage.put(`session-${session.sessionId}`, session.sessionData);
 		logInfo('answer_session_updated', session.sessionId, { sessionData: session.sessionData });
 
-		return createJsonResponse<ApiSubmitAnswerResponse>(
-			{
+		return {
+			success: true,
+			data: {
 				isCorrect,
 				lives: session.sessionData.lives,
 				score: session.sessionData.score,
 				logo: generateLogoUrl(correctAnswer.mediaId, !isCorrect, baseUrl),
 			},
-			200,
-		);
+		};
 	} catch (error) {
 		logError('answer_submission_error', session.sessionId, error);
-		return createJsonResponse<ApiErrorResponse>({ error: 'Error: Failed to submit answer' }, 500);
+		return {
+			success: false,
+			error: { code: SessionErrorCode.INTERNAL_ERROR, message: 'Failed to submit answer' },
+		};
 	}
 }

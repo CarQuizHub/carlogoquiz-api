@@ -1,5 +1,5 @@
 import { DurableObject } from 'cloudflare:workers';
-import { SessionData, Bindings } from '../types';
+import { SessionData, Bindings, AnswerRequest, StartSessionResult, SubmitAnswerResult, EndSessionResult } from '../types';
 import { handleStartSession } from '../handlers/startSessionHandler';
 import { handleSubmitAnswer } from '../handlers/submitAnswerHandler';
 import { handleEndSession } from '../handlers/endSessionHandler';
@@ -30,17 +30,17 @@ export class Session extends DurableObject {
 		});
 	}
 
-	async startSession(): Promise<Response> {
+	async startSession(): Promise<StartSessionResult> {
 		logInfo('session_start_request', this.sessionId);
 		return handleStartSession(this, this.env);
 	}
 
-	async submitAnswer(request: Request): Promise<Response> {
+	async submitAnswer(answerData: AnswerRequest): Promise<SubmitAnswerResult> {
 		logInfo('session_answer_request', this.sessionId);
-		return handleSubmitAnswer(this, request, this.env.MEDIA_BASE_URL);
+		return handleSubmitAnswer(this, answerData, this.env.MEDIA_BASE_URL);
 	}
 
-	async endSession(): Promise<Response> {
+	async endSession(): Promise<EndSessionResult> {
 		logInfo('session_end_request', this.sessionId);
 		return handleEndSession(this);
 	}

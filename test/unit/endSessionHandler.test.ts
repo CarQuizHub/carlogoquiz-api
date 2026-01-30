@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleEndSession } from '../../src/handlers/endSessionHandler';
 import type { SessionData } from '../../src/types';
+import { SessionErrorCode } from '../../src/types';
 
 const SESSION_ID = 'test-session';
 
@@ -29,33 +30,37 @@ describe('handleEndSession', () => {
 	});
 
 	it(' ends the session and clears stored data when sessionData exists', async () => {
-		const response = await handleEndSession(fakeSession as any);
-		const data = await response.json();
+		const result = await handleEndSession(fakeSession as any);
 
 		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalled();
 		expect(fakeSession.sessionData).toBeNull();
-		expect(response.status).toBe(200);
-		expect(data).toEqual({ message: 'Session ended and memory cleared' });
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data).toEqual({ message: 'Session ended and memory cleared' });
+		}
 	});
 
 	it('ends the session and clears stored data when sessionData is missing', async () => {
 		fakeSession.sessionData = null;
-		const response = await handleEndSession(fakeSession as any);
-		const data = await response.json();
+		const result = await handleEndSession(fakeSession as any);
 
 		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalled();
 		expect(fakeSession.sessionData).toBeNull();
-		expect(response.status).toBe(200);
-		expect(data).toEqual({ message: 'Session ended and memory cleared' });
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data).toEqual({ message: 'Session ended and memory cleared' });
+		}
 	});
 
-	it('handles errors and returns a 500 error', async () => {
+	it('handles errors and returns an error result', async () => {
 		fakeSession.state.storage.deleteAll.mockRejectedValue(new Error('DB error'));
 
-		const response = await handleEndSession(fakeSession as any);
-		const data = await response.json();
+		const result = await handleEndSession(fakeSession as any);
 
-		expect(response.status).toBe(500);
-		expect(data).toEqual({ error: 'Error: Failed to end session' });
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe(SessionErrorCode.INTERNAL_ERROR);
+			expect(result.error.message).toBe('Failed to end session');
+		}
 	});
 });
