@@ -30,7 +30,7 @@
 			},
 			"vars": {
 				"MEDIA_BASE_URL": "http://localhost:8787",
-				"PRODUCTION": "false",
+				"PRODUCTION": false,
 				"BRANDS_CACHE_DURATION": "10"
 			},
 			"durable_objects": {

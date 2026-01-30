@@ -28,7 +28,13 @@ app.get('/session/end', async (c) => {
 
 // Route to submit answer to a question stored in session.
 app.post('/session/answer', async (c) => {
-	const body = await c.req.json<AnswerRequest>();
+	let body: AnswerRequest;
+	try {
+		body = await c.req.json<AnswerRequest>();
+	} catch {
+		return createJsonResponse({ error: 'Invalid JSON body' }, 400);
+	}	
+	
 	return await handleSessionDurableObject(c, false, (stub) => stub.submitAnswer(body));
 });
 

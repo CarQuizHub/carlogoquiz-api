@@ -20,12 +20,7 @@ export class Session extends DurableObject {
 		// Initialize or restore session state
 		state.blockConcurrencyWhile(async () => {
 			const storedSession = await state.storage.get<SessionData>(`session-${this.sessionId}`);
-			this.sessionData = {
-				score: storedSession?.score ?? 0,
-				lives: storedSession?.lives ?? 3,
-				currentQuestion: storedSession?.currentQuestion ?? 0,
-				questions: storedSession?.questions ?? {},
-			};
+			this.sessionData = storedSession ?? null;
 			logInfo('session_initialized', this.sessionId, { isRestored: !!storedSession });
 		});
 	}
