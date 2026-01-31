@@ -30,7 +30,7 @@ describe('handleEndSession', () => {
 	it('ends the session and clears stored data when sessionData exists', async () => {
 		const result = await handleEndSession(fakeSession as any);
 
-		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalled();
+		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalledTimes(1);
 		expect(fakeSession.sessionData).toBeNull();
 		expect(result.success).toBe(true);
 
@@ -43,7 +43,7 @@ describe('handleEndSession', () => {
 		fakeSession.sessionData = null;
 		const result = await handleEndSession(fakeSession as any);
 
-		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalled();
+		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalledTimes(1);
 		expect(fakeSession.sessionData).toBeNull();
 		expect(result.success).toBe(true);
 

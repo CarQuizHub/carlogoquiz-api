@@ -9,6 +9,10 @@ export class ApiWorker extends WorkerEntrypoint<Bindings> {
 		return new QuizApi(this.env);
 	}
 
+	async fetch(request: Request): Promise<Response> {
+		return app.fetch(request, this.env, this.ctx);
+	}
+
 	async startSession(): Promise<StartSessionResult> {
 		return this.api().startSession();
 	}
