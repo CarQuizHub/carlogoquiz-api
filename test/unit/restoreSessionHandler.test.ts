@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { handleRestoreSession } from '../../src/handlers/restoreSessionHandler';
 import { fetchBrands } from '../../src/repositories/brandRepository';
 import type { Bindings, Brand, SessionData } from '../../src/types';

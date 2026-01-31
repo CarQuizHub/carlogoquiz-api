@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { handleStartSession } from '../../src/handlers/startSessionHandler';
 import { fetchBrands } from '../../src/repositories/brandRepository';
 import * as LogoUtils from '../../src/utils/logoUtils';
@@ -60,10 +61,7 @@ describe('handleStartSession', () => {
 		}
 
 		expect(fakeSession.sessionData).not.toBeNull();
-		expect(fakeSession.state.storage.put).toHaveBeenCalledWith(
-			'state',
-			expect.objectContaining({ questions: expect.any(Object) }),
-		);
+		expect(fakeSession.state.storage.put).toHaveBeenCalledWith('state', expect.objectContaining({ questions: expect.any(Object) }));
 
 		expect(fetchBrands).toHaveBeenCalledWith(fakeEnv, DO_ID);
 		expect(LogoUtils.generateLogoQuestions).toHaveBeenCalledWith(mockBrands, fakeEnv.MEDIA_BASE_URL);

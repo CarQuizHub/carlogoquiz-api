@@ -1,4 +1,5 @@
 import { describe, it, expect } from 'vitest';
+
 import {
 	generateLogoUrl,
 	generateLogoQuestions,
@@ -6,7 +7,7 @@ import {
 	isValidAnswerSubmission,
 	calculateLogoQuizScore,
 } from '../../src/utils';
-import type { Brand, StoredQuestion, Bindings } from '../../src/types';
+import type { Brand, StoredQuestion } from '../../src/types';
 
 const MEDIA_BASE_URL = 'https://cdn.example.com';
 

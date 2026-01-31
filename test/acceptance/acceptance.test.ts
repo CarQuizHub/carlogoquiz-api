@@ -1,5 +1,6 @@
-import { SELF, createExecutionContext, waitOnExecutionContext, env } from 'cloudflare:test';
+import { SELF, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { describe, it, expect } from 'vitest';
+
 import { ApiStartSessionResponse } from '../../src/types';
 
 describe('Session Durable Object API', () => {

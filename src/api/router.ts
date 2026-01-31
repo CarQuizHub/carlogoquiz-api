@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+
 import { Bindings, AnswerRequest } from '../types';
 import { CORS_OPTIONS } from '../config/constants';
 import { createJsonResponse } from '../api/response';
@@ -20,6 +21,7 @@ app.onError((err, c) => {
 app.get('/session/start', async (c) => {
 	const api = new QuizApi(c.env);
 	const result = await api.startSession();
+
 	return resultToResponse(result);
 });
 

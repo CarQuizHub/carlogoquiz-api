@@ -1,5 +1,6 @@
-import { v5 as uuidv5 } from 'uuid';
 import fs from 'fs';
+
+import { v5 as uuidv5 } from 'uuid';
 
 /**
  * Fixed namespace for UUID generation to ensure consistency.
@@ -55,7 +56,7 @@ async function readStdin(): Promise<{ id: number; brand_name: string }[]> {
 /**
  * Generates UUIDs for brand names and outputs SQL queries.
  */
-async function generateMediaIdQueries() {
+async function generateMediaIdQueries(): Promise<void> {
 	console.log('🔄 Reading brand IDs from input...');
 	const brands = await readStdin();
 

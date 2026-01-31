@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { handleEndSession } from '../../src/handlers/endSessionHandler';
 import type { SessionData } from '../../src/types';
 import { SessionErrorCode } from '../../src/types';

@@ -1,5 +1,6 @@
-import { defineWorkersConfig, readD1Migrations } from '@cloudflare/vitest-pool-workers/config';
 import path from 'path';
+
+import { defineWorkersConfig, readD1Migrations } from '@cloudflare/vitest-pool-workers/config';
 
 export default defineWorkersConfig(async () => {
 	// Read SQL migration files from the "migrations" directory

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi } from 'vitest';
+import { D1Database } from '@cloudflare/workers-types';
+
 import { fetchBrands } from '../../src/repositories/brandRepository';
 import type { Brand, Bindings } from '../../src/types';
-import { D1Database } from '@cloudflare/workers-types';
 
 const SESSION_ID = 'test-session';
 const MOCK_BRANDS: Brand[] = [
@@ -30,6 +31,7 @@ describe('fetchBrands', () => {
 
 		expect(MOCK_ENV.BRANDS_KV.get).toHaveBeenCalledWith('brands', 'json');
 		expect(MOCK_ENV.DB.prepare).not.toHaveBeenCalled();
+
 		expect(brands).toEqual(MOCK_BRANDS);
 	});
 

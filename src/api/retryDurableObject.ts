@@ -7,10 +7,10 @@ import { Result, SessionErrorCode } from '../types';
  */
 export async function retryDurableObject<T>(
 	fn: () => Promise<Result<T>>,
-	sessionId: string = 'unknown',
-	maxAttempts: number = 3,
-	baseBackoffMs: number = 100,
-	maxBackoffMs: number = 2000,
+	sessionId = 'unknown',
+	maxAttempts = 3,
+	baseBackoffMs = 100,
+	maxBackoffMs = 2000,
 ): Promise<Result<T>> {
 	let attempt = 0;
 
