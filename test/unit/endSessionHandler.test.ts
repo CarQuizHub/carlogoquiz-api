@@ -3,25 +3,23 @@ import { handleEndSession } from '../../src/handlers/endSessionHandler';
 import type { SessionData } from '../../src/types';
 import { SessionErrorCode } from '../../src/types';
 
-const SESSION_ID = 'test-session';
+const DO_ID = 'do-id-123';
 
 describe('handleEndSession', () => {
 	let fakeSession: {
-		sessionId: string;
 		sessionData: SessionData | null;
 		state: {
-			storage: {
-				deleteAll: ReturnType<typeof vi.fn>;
-			};
+			id: { toString: () => string };
+			storage: { deleteAll: ReturnType<typeof vi.fn> };
 		};
 	};
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		fakeSession = {
-			sessionId: SESSION_ID,
 			sessionData: { score: 100, lives: 3, currentQuestion: 0, questions: {} },
 			state: {
+				id: { toString: () => DO_ID },
 				storage: {
 					deleteAll: vi.fn().mockResolvedValue(undefined),
 				},
@@ -29,12 +27,13 @@ describe('handleEndSession', () => {
 		};
 	});
 
-	it(' ends the session and clears stored data when sessionData exists', async () => {
+	it('ends the session and clears stored data when sessionData exists', async () => {
 		const result = await handleEndSession(fakeSession as any);
 
 		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalled();
 		expect(fakeSession.sessionData).toBeNull();
 		expect(result.success).toBe(true);
+
 		if (result.success) {
 			expect(result.data).toEqual({ message: 'Session ended and memory cleared' });
 		}
@@ -47,6 +46,7 @@ describe('handleEndSession', () => {
 		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalled();
 		expect(fakeSession.sessionData).toBeNull();
 		expect(result.success).toBe(true);
+
 		if (result.success) {
 			expect(result.data).toEqual({ message: 'Session ended and memory cleared' });
 		}
