@@ -9,52 +9,51 @@ const DO_ID = 'do-id-123';
 describe('handleEndSession', () => {
 	let fakeSession: {
 		sessionData: SessionData | null;
-		state: {
-			id: { toString: () => string };
-			storage: { deleteAll: ReturnType<typeof vi.fn> };
-		};
+		state: { id: { toString: () => string } };
+		clear: ReturnType<typeof vi.fn>;
 	};
 
 	beforeEach(() => {
 		vi.clearAllMocks();
+
 		fakeSession = {
-			sessionData: { score: 100, lives: 3, currentQuestion: 0, questions: {} },
-			state: {
-				id: { toString: () => DO_ID },
-				storage: {
-					deleteAll: vi.fn().mockResolvedValue(undefined),
-				},
+			sessionData: {
+				score: 100,
+				lives: 3,
+				currentQuestion: 5,
+				questions: [{ logo: 'logo1.png', brandId: 1, difficulty: 2, mediaId: 'media1' }],
 			},
+			state: { id: { toString: () => DO_ID } },
+			clear: vi.fn().mockResolvedValue(undefined),
 		};
 	});
 
-	it('ends the session and clears stored data when sessionData exists', async () => {
+	it('ends session successfully and clears storage', async () => {
 		const result = await handleEndSession(fakeSession as any);
 
-		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalledTimes(1);
-		expect(fakeSession.sessionData).toBeNull();
 		expect(result.success).toBe(true);
-
 		if (result.success) {
-			expect(result.data).toEqual({ message: 'Session ended and memory cleared' });
+			expect(result.data.message).toBe('Session ended and memory cleared');
 		}
+
+		expect(fakeSession.clear).toHaveBeenCalledTimes(1);
 	});
 
-	it('ends the session and clears stored data when sessionData is missing', async () => {
+	it('ends session successfully when sessionData is null', async () => {
 		fakeSession.sessionData = null;
+
 		const result = await handleEndSession(fakeSession as any);
 
-		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalledTimes(1);
-		expect(fakeSession.sessionData).toBeNull();
 		expect(result.success).toBe(true);
-
 		if (result.success) {
-			expect(result.data).toEqual({ message: 'Session ended and memory cleared' });
+			expect(result.data.message).toBe('Session ended and memory cleared');
 		}
+
+		expect(fakeSession.clear).toHaveBeenCalledTimes(1);
 	});
 
-	it('handles errors and returns an error result', async () => {
-		fakeSession.state.storage.deleteAll.mockRejectedValue(new Error('DB error'));
+	it('returns INTERNAL_ERROR when clear() throws', async () => {
+		fakeSession.clear.mockRejectedValue(new Error('Storage failure'));
 
 		const result = await handleEndSession(fakeSession as any);
 

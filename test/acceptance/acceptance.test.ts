@@ -1,552 +1,859 @@
-import { SELF, createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
-import { describe, it, expect } from 'vitest';
+import { env, runInDurableObject, fetchMock } from 'cloudflare:test';
+import { beforeAll, beforeEach, afterEach, describe, it, expect } from 'vitest';
 
-import { ApiStartSessionResponseWithId, ApiSubmitAnswerResponse, SessionErrorCode } from '../../src/types';
+import { QuizApi } from '../../src/services/quizApi';
+import type { SessionData, AnswerRequest } from '../../src/types';
+import { SessionErrorCode } from '../../src/types';
 
-async function startSession(): Promise<{ sessionId: string; data: ApiStartSessionResponseWithId }> {
-	const request = new Request('http://example.com/session/start', { method: 'GET' });
-	const response = await SELF.fetch(request);
-	const body = (await response.json()) as ApiStartSessionResponseWithId;
-	return { sessionId: body.sessionId, data: body };
+beforeAll(() => {
+	fetchMock.activate();
+	fetchMock.disableNetConnect();
+});
+
+afterEach(() => {
+	fetchMock.assertNoPendingInterceptors();
+});
+
+// -------------------- Deterministic RNG --------------------
+const ORIGINAL_RANDOM = Math.random;
+
+function mulberry32(seed: number) {
+	return function () {
+		let t = (seed += 0x6d2b79f5);
+		t = Math.imul(t ^ (t >>> 15), t | 1);
+		t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+		return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+	};
 }
 
-async function submitAnswer(
-	sessionId: string,
-	questionNumber: number,
-	brandId: number,
-	timeTaken?: number,
-): Promise<{ status: number; body: ApiSubmitAnswerResponse | { error: string; code?: string } }> {
-	const request = new Request('http://example.com/session/answer', {
-		method: 'POST',
-		headers: {
-			'Content-Type': 'application/json',
-			session_id: sessionId,
-		},
-		body: JSON.stringify({ questionNumber, brandId, timeTaken }),
-	});
-	const response = await SELF.fetch(request);
-	const body = (await response.json()) as ApiSubmitAnswerResponse | { error: string; code?: string };
-	return { status: response.status, body };
+function hash32(str: string) {
+	let h = 0x811c9dc5;
+	for (let i = 0; i < str.length; i++) {
+		h ^= str.charCodeAt(i);
+		h = Math.imul(h, 0x01000193);
+	}
+	return h >>> 0;
 }
 
-async function restoreSession(
-	sessionId: string,
-): Promise<{ status: number; body: ApiStartSessionResponseWithId | { error: string; code?: string } }> {
-	const request = new Request('http://example.com/session/restore', {
-		method: 'GET',
-		headers: { session_id: sessionId },
-	});
-	const response = await SELF.fetch(request);
-	const body = (await response.json()) as ApiStartSessionResponseWithId | { error: string; code?: string };
-	return { status: response.status, body };
+beforeEach(() => {
+	const name = (expect as any).getState?.().currentTestName ?? 'seed';
+	Math.random = mulberry32(hash32(String(name)));
+});
+
+afterEach(() => {
+	Math.random = ORIGINAL_RANDOM;
+});
+
+// -------------------- Helpers --------------------
+function getApi(): QuizApi {
+	return new QuizApi(env);
 }
 
-async function endSession(sessionId: string): Promise<{ status: number; body: { message?: string; error?: string } }> {
-	const request = new Request('http://example.com/session/end', {
-		method: 'GET',
-		headers: { session_id: sessionId },
-	});
-	const response = await SELF.fetch(request);
-	const body = (await response.json()) as { message?: string; error?: string };
-	return { status: response.status, body };
+function getSessionStub(sessionId: string) {
+	const id = env.SESSION.idFromString(sessionId);
+	return env.SESSION.get(id);
 }
 
-describe('Session API - Start Session', () => {
-	it('should start a new session with brands and questions', async () => {
-		const request = new Request('http://example.com/session/start', { method: 'GET' });
-		const ctx = createExecutionContext();
-		const response = await SELF.fetch(request);
-		await waitOnExecutionContext(ctx);
+async function getSessionState(sessionId: string): Promise<SessionData | null> {
+	const stub = getSessionStub(sessionId);
+	return await runInDurableObject(stub, async (_instance, state) => {
+		const data = await state.storage.get('state');
+		return (data as SessionData) ?? null;
+	});
+}
 
-		expect(response.status).toBe(200);
-		const body = (await response.json()) as ApiStartSessionResponseWithId;
+async function getSessionStateOrFail(sessionId: string): Promise<SessionData> {
+	const sessionState = await getSessionState(sessionId);
+	expect(sessionState, `Expected session state to exist for session ${sessionId}`).not.toBeNull();
+	return sessionState as SessionData;
+}
 
-		// Verify session ID is returned
-		expect(body.sessionId).toBeTruthy();
-		expect(typeof body.sessionId).toBe('string');
+async function getCorrectBrandId(sessionId: string, questionNumber: number): Promise<number> {
+	const sessionState = await getSessionStateOrFail(sessionId);
+	return sessionState.questions[questionNumber].brandId;
+}
 
-		// Verify brands
-		expect(body.brands).toHaveLength(89);
-		expect(body.brands[0]).toHaveProperty('id');
-		expect(body.brands[0]).toHaveProperty('brand_name');
+function createAnswerRequest(questionNumber: number, brandId: number, timeTaken: number | null = null): AnswerRequest {
+	return { questionNumber, brandId, timeTaken };
+}
 
-		// Verify questions
-		expect(body.questions).toHaveLength(15);
-		expect(body.questions[0]).toHaveProperty('question');
-		expect(body.questions[0].question).toHaveProperty('logo');
+describe('startSession', () => {
+	it('returns session with brands and questions', async () => {
+		const result = await getApi().startSession();
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		expect(result.data.sessionId).toBeTruthy();
+		expect(typeof result.data.sessionId).toBe('string');
+		expect(result.data.brands).toHaveLength(89);
+		expect(result.data.questions).toHaveLength(15);
 	});
 
-	it('should return unique session IDs for each new session', async () => {
-		const { sessionId: sessionId1 } = await startSession();
-		const { sessionId: sessionId2 } = await startSession();
+	it('returns brands with id and brand_name', async () => {
+		const result = await getApi().startSession();
 
-		expect(sessionId1).not.toBe(sessionId2);
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const firstBrand = result.data.brands[0];
+		expect(firstBrand).toHaveProperty('id');
+		expect(firstBrand).toHaveProperty('brand_name');
+		expect(typeof firstBrand.id).toBe('number');
+		expect(typeof firstBrand.brand_name).toBe('string');
 	});
 
-	it('should return questions with valid logo URLs', async () => {
-		const { data } = await startSession();
+	it('returns questions with valid logo URLs', async () => {
+		const result = await getApi().startSession();
 
-		data.questions.forEach((q) => {
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		result.data.questions.forEach((q) => {
 			expect(q.question.logo).toMatch(/^http/);
 			expect(q.question.logo).toContain('/brands/');
 		});
 	});
+
+	it('generates unique session IDs', async () => {
+		const results = await Promise.all(Array.from({ length: 5 }, () => getApi().startSession()));
+
+		const sessionIds = results.filter((r) => r.success).map((r) => (r.success ? r.data.sessionId : null));
+
+		expect(new Set(sessionIds).size).toBe(5);
+	});
+
+	it('initializes session state correctly', async () => {
+		const result = await getApi().startSession();
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const sessionState = await getSessionStateOrFail(result.data.sessionId);
+
+		expect(sessionState.score).toBe(0);
+		expect(sessionState.lives).toBe(3);
+		expect(sessionState.currentQuestion).toBe(0);
+		expect(sessionState.questions).toHaveLength(15);
+	});
+
+	it('stores questions with brandId, difficulty, and mediaId', async () => {
+		const result = await getApi().startSession();
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		const sessionState = await getSessionStateOrFail(result.data.sessionId);
+		const storedQuestion = sessionState.questions[0];
+
+		expect(storedQuestion).toHaveProperty('brandId');
+		expect(storedQuestion).toHaveProperty('difficulty');
+		expect(storedQuestion).toHaveProperty('mediaId');
+		expect(storedQuestion).toHaveProperty('logo');
+	});
 });
 
-describe('Session API - Restore Session', () => {
-	it('should restore an existing session', async () => {
-		const { sessionId, data: originalData } = await startSession();
+describe('restoreSession', () => {
+	it('restores existing session with identical questions', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
 
-		const { status, body } = await restoreSession(sessionId);
+		const restoreResult = await api.restoreSession(startResult.data.sessionId);
 
-		expect(status).toBe(200);
-		const restoredData = body as ApiStartSessionResponseWithId;
-		expect(restoredData.brands).toHaveLength(89);
-		expect(restoredData.questions).toHaveLength(15);
-		// Questions should match the original session
-		expect(restoredData.questions).toEqual(originalData.questions);
+		expect(restoreResult.success).toBe(true);
+		if (!restoreResult.success) return;
+
+		expect(restoreResult.data.questions).toEqual(startResult.data.questions);
+		expect(restoreResult.data.brands).toHaveLength(89);
 	});
 
-	it('should return error when restoring without session_id header', async () => {
-		const request = new Request('http://example.com/session/restore', { method: 'GET' });
-		const response = await SELF.fetch(request);
+	it('returns same sessionId on restore', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
 
-		expect(response.status).toBe(400);
-		const body: { error: string } = await response.json();
-		expect(body.error).toBe('Missing session_id header');
+		const originalSessionId = startResult.data.sessionId;
+
+		const restoreResult = await api.restoreSession(originalSessionId);
+		expect(restoreResult.success).toBe(true);
+		if (!restoreResult.success) return;
+
+		expect(restoreResult.data.sessionId).toBe(originalSessionId);
 	});
 
-	it('should return error when restoring with invalid session_id', async () => {
-		const { status, body } = await restoreSession('invalid-session-id');
+	it('returns INVALID_SESSION_ID for malformed session id', async () => {
+		const result = await getApi().restoreSession('invalid-session-id');
 
-		expect(status).toBe(400);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.INVALID_SESSION_ID);
+		expect(result.success).toBe(false);
+		if (result.success) return;
+
+		expect(result.error.code).toBe(SessionErrorCode.INVALID_SESSION_ID);
 	});
 
-	it('should return error when restoring a non-existent session', async () => {
+	it('returns INVALID_SESSION_ID for non-existent but valid format session id', async () => {
 		const fakeSessionId = '0000000000000000000000000000000000000000000000000000000000000000';
-		const { status, body } = await restoreSession(fakeSessionId);
+		const result = await getApi().restoreSession(fakeSessionId);
 
-		expect(status).toBe(400);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.INVALID_SESSION_ID);
+		expect(result.success).toBe(false);
+		if (result.success) return;
+
+		expect(result.error.code).toBe(SessionErrorCode.INVALID_SESSION_ID);
 	});
 
-	it('should return error when restoring an ended session', async () => {
-		const { sessionId } = await startSession();
-		await endSession(sessionId);
+	it('returns SESSION_NOT_FOUND for ended session', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
 
-		const { status, body } = await restoreSession(sessionId);
+		await api.endSession(startResult.data.sessionId);
 
-		expect(status).toBe(404);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.SESSION_NOT_FOUND);
-	});
-});
+		const restoreResult = await api.restoreSession(startResult.data.sessionId);
 
-describe('Session API - Submit Answer', () => {
-	it('should return error when submitting without session_id header', async () => {
-		const request = new Request('http://example.com/session/answer', {
-			method: 'POST',
-			headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ questionNumber: 0, brandId: 1, timeTaken: 5 }),
-		});
+		expect(restoreResult.success).toBe(false);
+		if (restoreResult.success) return;
 
-		const response = await SELF.fetch(request);
-
-		expect(response.status).toBe(400);
-		const body: { error: string } = await response.json();
-		expect(body.error).toBe('Missing session_id header');
+		expect(restoreResult.error.code).toBe(SessionErrorCode.SESSION_NOT_FOUND);
 	});
 
-	it('should return error when submitting with invalid JSON body', async () => {
-		const { sessionId } = await startSession();
+	describe('state preservation', () => {
+		it('preserves current question progress after restore', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
 
-		const request = new Request('http://example.com/session/answer', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				session_id: sessionId,
-			},
-			body: 'invalid json',
-		});
+			const sessionId = startResult.data.sessionId;
 
-		const response = await SELF.fetch(request);
-
-		expect(response.status).toBe(400);
-		const body: { error: string } = await response.json();
-		expect(body.error).toBe('Invalid JSON body');
-	});
-
-	it('should return error when submitting with invalid session_id', async () => {
-		const { status, body } = await submitAnswer('invalid-session-id', 0, 1);
-
-		expect(status).toBe(400);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.INVALID_SESSION_ID);
-	});
-
-	it('should return error when submitting to a non-existent session', async () => {
-		const fakeSessionId = '0000000000000000000000000000000000000000000000000000000000000000';
-		const { status, body } = await submitAnswer(fakeSessionId, 0, 1);
-
-		expect(status).toBe(400);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.INVALID_SESSION_ID);
-	});
-
-	it('should return error when submitting with invalid input format', async () => {
-		const { sessionId } = await startSession();
-
-		// Missing required fields
-		const request = new Request('http://example.com/session/answer', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				session_id: sessionId,
-			},
-			body: JSON.stringify({ questionNumber: 0 }), // Missing brandId
-		});
-
-		const response = await SELF.fetch(request);
-		const body = await response.json();
-
-		expect((body as { code: string }).code).toBe(SessionErrorCode.INVALID_INPUT_FORMAT);
-	});
-
-	it('should return error when submitting answer for wrong question number', async () => {
-		const { sessionId } = await startSession();
-
-		// Try to answer question 5 when we should answer question 0
-		const { status, body } = await submitAnswer(sessionId, 5, 1);
-
-		expect(status).toBe(400);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.INVALID_QUESTION_NUMBER);
-	});
-
-	it('should return error when submitting negative question number', async () => {
-		const { sessionId } = await startSession();
-
-		const { status, body } = await submitAnswer(sessionId, -1, 1);
-
-		expect(status).toBe(400);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.INVALID_QUESTION_NUMBER);
-	});
-
-	it('should accept a correct answer and return updated state', async () => {
-		const { sessionId } = await startSession();
-
-		// We need to find the correct brand for question 0
-		// Since questions are randomized, we'll just submit and check the response structure
-		const { status, body } = await submitAnswer(sessionId, 0, 1, 5000);
-
-		expect(status).toBe(200);
-		const response = body as ApiSubmitAnswerResponse;
-		expect(response).toHaveProperty('isCorrect');
-		expect(response).toHaveProperty('lives');
-		expect(response).toHaveProperty('score');
-		expect(response).toHaveProperty('logo');
-		expect(typeof response.isCorrect).toBe('boolean');
-		expect(typeof response.lives).toBe('number');
-		expect(typeof response.score).toBe('number');
-	});
-
-	it('should decrement lives on incorrect answer', async () => {
-		const { sessionId } = await startSession();
-
-		// Submit an answer (likely incorrect with random brandId)
-		const { body: firstAnswer } = await submitAnswer(sessionId, 0, 99999);
-		const response1 = firstAnswer as ApiSubmitAnswerResponse;
-
-		if (!response1.isCorrect) {
-			expect(response1.lives).toBe(2); // Started with 3, now 2
-		}
-	});
-
-	it('should not progress question number on incorrect answer', async () => {
-		const { sessionId } = await startSession();
-
-		// Submit incorrect answer for question 0
-		const { body: firstAnswer } = await submitAnswer(sessionId, 0, 99999);
-		const response1 = firstAnswer as ApiSubmitAnswerResponse;
-
-		if (!response1.isCorrect) {
-			// Should still be able to answer question 0
-			const { status } = await submitAnswer(sessionId, 0, 99998);
-			expect(status).toBe(200);
-		}
-	});
-});
-
-describe('Session API - Game Over', () => {
-	it('should return game over error after losing all lives', async () => {
-		const { sessionId } = await startSession();
-
-		// Submit 3 wrong answers to lose all lives
-		let lastResponse: ApiSubmitAnswerResponse | null = null;
-		for (let i = 0; i < 3; i++) {
-			const { body } = await submitAnswer(sessionId, 0, 99999 + i);
-			lastResponse = body as ApiSubmitAnswerResponse;
-			if (lastResponse.isCorrect) {
-				// If we accidentally got it right, this test won't work as expected
-				// In a real scenario, you'd need to know the correct answer to avoid it
-				break;
+			// Answer first 2 questions
+			for (let i = 0; i < 2; i++) {
+				const correctBrandId = await getCorrectBrandId(sessionId, i);
+				await api.submitAnswer(sessionId, createAnswerRequest(i, correctBrandId));
 			}
+
+			// Restore session
+			const restoreResult = await api.restoreSession(sessionId);
+			expect(restoreResult.success).toBe(true);
+
+			// Verify we can continue from question 2 (not question 0)
+			const correctBrandId = await getCorrectBrandId(sessionId, 2);
+			const answerResult = await api.submitAnswer(sessionId, createAnswerRequest(2, correctBrandId));
+
+			expect(answerResult.success).toBe(true);
+			if (!answerResult.success) return;
+
+			expect(answerResult.data.isCorrect).toBe(true);
+		});
+
+		it('preserves score and lives after restore', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+			const wrongBrandId = correctBrandId + 99999;
+
+			// Get a correct answer (gains score)
+			const correctResult = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId));
+			expect(correctResult.success).toBe(true);
+			if (!correctResult.success) return;
+
+			const scoreAfterCorrect = correctResult.data.score;
+
+			// Get a wrong answer (loses life)
+			const wrongResult = await api.submitAnswer(sessionId, createAnswerRequest(1, wrongBrandId));
+			expect(wrongResult.success).toBe(true);
+			if (!wrongResult.success) return;
+
+			const livesAfterWrong = wrongResult.data.lives;
+
+			await api.restoreSession(sessionId);
+
+			const sessionState = await getSessionStateOrFail(sessionId);
+			expect(sessionState.score).toBe(scoreAfterCorrect);
+			expect(sessionState.lives).toBe(livesAfterWrong);
+			expect(sessionState.currentQuestion).toBe(1);
+		});
+	});
+});
+
+describe('submitAnswer', () => {
+	describe('validation', () => {
+		it('returns INVALID_SESSION_ID for non-existent session', async () => {
+			const fakeSessionId = '0000000000000000000000000000000000000000000000000000000000000000';
+			const result = await getApi().submitAnswer(fakeSessionId, createAnswerRequest(0, 1));
+
+			expect(result.success).toBe(false);
+			if (result.success) return;
+
+			expect(result.error.code).toBe(SessionErrorCode.INVALID_SESSION_ID);
+		});
+
+		it('returns INVALID_QUESTION_NUMBER for wrong question number', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const result = await api.submitAnswer(startResult.data.sessionId, createAnswerRequest(5, 1));
+
+			expect(result.success).toBe(false);
+			if (result.success) return;
+
+			expect(result.error.code).toBe(SessionErrorCode.INVALID_QUESTION_NUMBER);
+		});
+
+		it('returns INVALID_QUESTION_NUMBER for negative question number', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const result = await api.submitAnswer(startResult.data.sessionId, createAnswerRequest(-1, 1));
+
+			expect(result.success).toBe(false);
+			if (result.success) return;
+
+			expect(result.error.code).toBe(SessionErrorCode.INVALID_QUESTION_NUMBER);
+		});
+
+		it('returns INVALID_INPUT_FORMAT when brandId is missing', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const result = await api.submitAnswer(startResult.data.sessionId, {
+				questionNumber: 0,
+				brandId: undefined as unknown as number,
+				timeTaken: null,
+			});
+
+			expect(result.success).toBe(false);
+			if (result.success) return;
+
+			expect(result.error.code).toBe(SessionErrorCode.INVALID_INPUT_FORMAT);
+		});
+
+		it('returns INVALID_INPUT_FORMAT when questionNumber is missing', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const result = await api.submitAnswer(startResult.data.sessionId, {
+				questionNumber: undefined as unknown as number,
+				brandId: 1,
+				timeTaken: null,
+			});
+
+			expect(result.success).toBe(false);
+			if (result.success) return;
+
+			expect(result.error.code).toBe(SessionErrorCode.INVALID_INPUT_FORMAT);
+		});
+	});
+
+	describe('correct answers', () => {
+		it('accepts correct answer and returns isCorrect true', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId, 2500));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			expect(result.data.isCorrect).toBe(true);
+			expect(result.data.lives).toBe(3);
+			expect(result.data.score).toBeGreaterThan(0);
+			expect(result.data.logo).toBeTruthy();
+		});
+
+		it('advances to next question after correct answer', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+
+			await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId));
+
+			const sessionState = await getSessionStateOrFail(sessionId);
+			expect(sessionState.currentQuestion).toBe(1);
+		});
+
+		it('increments score based on difficulty', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			expect(result.data.score).toBeGreaterThan(0);
+		});
+
+		it('score increases with each correct answer', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			let previousScore = 0;
+
+			for (let i = 0; i < 3; i++) {
+				const correctBrandId = await getCorrectBrandId(sessionId, i);
+				const result = await api.submitAnswer(sessionId, createAnswerRequest(i, correctBrandId));
+
+				expect(result.success).toBe(true);
+				if (!result.success) return;
+
+				expect(result.data.score).toBeGreaterThan(previousScore);
+				previousScore = result.data.score;
+			}
+		});
+	});
+
+	describe('incorrect answers', () => {
+		it('decrements lives on wrong answer', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+			const wrongBrandId = correctBrandId + 99999;
+
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			expect(result.data.isCorrect).toBe(false);
+			expect(result.data.lives).toBe(2);
+		});
+
+		it('does not advance question on wrong answer', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+			const wrongBrandId = correctBrandId + 99999;
+
+			await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+
+			const sessionState = await getSessionStateOrFail(sessionId);
+			expect(sessionState.currentQuestion).toBe(0);
+		});
+
+		it('does not change score on wrong answer', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+			const wrongBrandId = correctBrandId + 99999;
+
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			expect(result.data.score).toBe(0);
+		});
+
+		it('allows retry on same question after wrong answer', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+			const wrongBrandId = correctBrandId + 99999;
+
+			await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+
+			const retryResult = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId));
+
+			expect(retryResult.success).toBe(true);
+			if (!retryResult.success) return;
+
+			expect(retryResult.data.isCorrect).toBe(true);
+		});
+	});
+
+	describe('game over', () => {
+		it('returns GAME_OVER after losing all lives', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+			const wrongBrandId = correctBrandId + 99999;
+
+			// Lose all 3 lives
+			for (let i = 0; i < 3; i++) {
+				await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+			}
+
+			const gameOverResult = await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+
+			expect(gameOverResult.success).toBe(false);
+			if (gameOverResult.success) return;
+
+			expect(gameOverResult.error.code).toBe(SessionErrorCode.GAME_OVER);
+		});
+
+		it('returns lives as 0 on final wrong answer before game over', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+			const wrongBrandId = correctBrandId + 99999;
+
+			// Get to 1 life
+			await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+			await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+
+			// Final wrong answer
+			const finalResult = await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+
+			expect(finalResult.success).toBe(true);
+			if (!finalResult.success) return;
+
+			expect(finalResult.data.lives).toBe(0);
+		});
+	});
+
+	describe('timeTaken handling', () => {
+		it('accepts null timeTaken', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId, null));
+
+			expect(result.success).toBe(true);
+		});
+
+		it('accepts zero timeTaken', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId, 0));
+
+			expect(result.success).toBe(true);
+		});
+	});
+
+	describe('response structure', () => {
+		it('returns correct logo URL format on correct answer', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			expect(result.data.logo).toMatch(/^http/);
+			expect(result.data.logo).toContain('/brands/');
+		});
+
+		it('returns logo on wrong answer', async () => {
+			const api = getApi();
+			const startResult = await api.startSession();
+			expect(startResult.success).toBe(true);
+			if (!startResult.success) return;
+
+			const sessionId = startResult.data.sessionId;
+			const correctBrandId = await getCorrectBrandId(sessionId, 0);
+			const wrongBrandId = correctBrandId + 99999;
+
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			expect(result.data.logo).toBeTruthy();
+			expect(typeof result.data.logo).toBe('string');
+		});
+	});
+});
+
+describe('endSession', () => {
+	it('successfully ends an active session', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
+
+		const result = await api.endSession(startResult.data.sessionId);
+
+		expect(result.success).toBe(true);
+		if (!result.success) return;
+
+		expect(result.data.message).toBe('Session ended and memory cleared');
+	});
+
+	it('clears session state after ending', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
+
+		const sessionId = startResult.data.sessionId;
+
+		await api.endSession(sessionId);
+
+		const sessionState = await getSessionState(sessionId);
+		expect(sessionState).toBeNull();
+	});
+
+	it('returns INVALID_SESSION_ID for malformed session id', async () => {
+		const result = await getApi().endSession('invalid-session-id');
+
+		expect(result.success).toBe(false);
+		if (result.success) return;
+
+		expect(result.error.code).toBe(SessionErrorCode.INVALID_SESSION_ID);
+	});
+
+	it('prevents submitting answers after session ended', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
+
+		const sessionId = startResult.data.sessionId;
+
+		await api.endSession(sessionId);
+
+		const result = await api.submitAnswer(sessionId, createAnswerRequest(0, 1));
+
+		expect(result.success).toBe(false);
+		if (result.success) return;
+
+		expect(result.error.code).toBe(SessionErrorCode.NO_ACTIVE_SESSION);
+	});
+});
+
+describe('game completion', () => {
+	it('clears session after answering all questions correctly', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
+
+		const sessionId = startResult.data.sessionId;
+		const totalQuestions = startResult.data.questions.length;
+
+		// Answer all questions correctly
+		for (let i = 0; i < totalQuestions; i++) {
+			const correctBrandId = await getCorrectBrandId(sessionId, i);
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(i, correctBrandId, 1000));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			expect(result.data.isCorrect).toBe(true);
+			expect(result.data.lives).toBe(3);
 		}
 
-		// If we lost all 3 lives
-		if (lastResponse && lastResponse.lives === 0) {
-			// Next submission should fail
-			const { status, body } = await submitAnswer(sessionId, 0, 1);
-			expect(status).toBe(409);
-			expect((body as { code: string }).code).toBe(SessionErrorCode.GAME_OVER);
+		const sessionState = await getSessionState(sessionId);
+		expect(sessionState).toBeNull();
+	});
+
+	it('returns final score with time bonus on last question', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
+
+		const sessionId = startResult.data.sessionId;
+		const totalQuestions = startResult.data.questions.length;
+
+		let scoreBeforeLast = 0;
+
+		// Answer all but last question
+		for (let i = 0; i < totalQuestions - 1; i++) {
+			const correctBrandId = await getCorrectBrandId(sessionId, i);
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(i, correctBrandId, null));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			scoreBeforeLast = result.data.score;
 		}
+
+		// Answer last question with timeTaken for bonus
+		const lastCorrectBrandId = await getCorrectBrandId(sessionId, totalQuestions - 1);
+		const finalResult = await api.submitAnswer(sessionId, createAnswerRequest(totalQuestions - 1, lastCorrectBrandId, 100));
+
+		expect(finalResult.success).toBe(true);
+		if (!finalResult.success) return;
+
+		expect(finalResult.data.score).toBeGreaterThan(scoreBeforeLast + 6);
+	});
+
+	it('cannot submit answers after game completion', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
+
+		const sessionId = startResult.data.sessionId;
+		const totalQuestions = startResult.data.questions.length;
+
+		// Complete the game
+		for (let i = 0; i < totalQuestions; i++) {
+			const correctBrandId = await getCorrectBrandId(sessionId, i);
+			await api.submitAnswer(sessionId, createAnswerRequest(i, correctBrandId));
+		}
+
+		// Try to submit another answer
+		const result = await api.submitAnswer(sessionId, createAnswerRequest(0, 1));
+
+		expect(result.success).toBe(false);
+		if (result.success) return;
+
+		expect(result.error.code).toBe(SessionErrorCode.NO_ACTIVE_SESSION);
 	});
 });
 
-describe('Session API - End Session', () => {
-	it('should return error when ending without session_id header', async () => {
-		const request = new Request('http://example.com/session/end', {
-			method: 'GET',
-		});
+describe('full game flow', () => {
+	it('completes start → answer → restore → end lifecycle', async () => {
+		const api = getApi();
 
-		const response = await SELF.fetch(request);
+		// Start
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
 
-		expect(response.status).toBe(400);
-		const body: { error: string } = await response.json();
-		expect(body.error).toBe('Missing session_id header');
+		const sessionId = startResult.data.sessionId;
+		const correctBrandId = await getCorrectBrandId(sessionId, 0);
+
+		// Answer
+		const answerResult = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId, 3000));
+		expect(answerResult.success).toBe(true);
+
+		// Restore mid-game
+		const restoreResult = await api.restoreSession(sessionId);
+		expect(restoreResult.success).toBe(true);
+
+		// End
+		const endResult = await api.endSession(sessionId);
+		expect(endResult.success).toBe(true);
+
+		const restoreAfterEnd = await api.restoreSession(sessionId);
+		expect(restoreAfterEnd.success).toBe(false);
 	});
 
-	it('should successfully end an active session', async () => {
-		const { sessionId } = await startSession();
+	it('maintains state correctly across multiple answers', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
 
-		const { status, body } = await endSession(sessionId);
+		const sessionId = startResult.data.sessionId;
 
-		expect(status).toBe(200);
-		expect(body.message).toBe('Session ended and memory cleared');
+		// Answer first 3 questions correctly
+		for (let i = 0; i < 3; i++) {
+			const correctBrandId = await getCorrectBrandId(sessionId, i);
+			const result = await api.submitAnswer(sessionId, createAnswerRequest(i, correctBrandId));
+
+			expect(result.success).toBe(true);
+			if (!result.success) return;
+
+			expect(result.data.lives).toBe(3);
+		}
+
+		const sessionState = await getSessionStateOrFail(sessionId);
+		expect(sessionState.currentQuestion).toBe(3);
+		expect(sessionState.score).toBeGreaterThan(0);
 	});
 
-	it('should return error when ending with invalid session_id', async () => {
-		const { status, body } = await endSession('invalid-session-id');
+	it('handles mixed correct and incorrect answers', async () => {
+		const api = getApi();
+		const startResult = await api.startSession();
+		expect(startResult.success).toBe(true);
+		if (!startResult.success) return;
 
-		expect(status).toBe(400);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.INVALID_SESSION_ID);
-	});
+		const sessionId = startResult.data.sessionId;
+		const correctBrandId = await getCorrectBrandId(sessionId, 0);
+		const wrongBrandId = correctBrandId + 99999;
 
-	it('should clear session data after ending', async () => {
-		const { sessionId } = await startSession();
+		// Wrong answer
+		const wrongResult = await api.submitAnswer(sessionId, createAnswerRequest(0, wrongBrandId));
+		expect(wrongResult.success).toBe(true);
+		if (!wrongResult.success) return;
+		expect(wrongResult.data.lives).toBe(2);
 
-		// End the session
-		await endSession(sessionId);
+		// Correct answer (same question)
+		const correctResult = await api.submitAnswer(sessionId, createAnswerRequest(0, correctBrandId));
+		expect(correctResult.success).toBe(true);
+		if (!correctResult.success) return;
+		expect(correctResult.data.lives).toBe(2);
 
-		// Try to restore - should fail
-		const { status, body } = await restoreSession(sessionId);
-		expect(status).toBe(404);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.SESSION_NOT_FOUND);
-	});
-
-	it('should not allow submitting answers after session ended', async () => {
-		const { sessionId } = await startSession();
-
-		await endSession(sessionId);
-
-		const { status, body } = await submitAnswer(sessionId, 0, 1);
-		expect(status).toBe(404);
-		expect((body as { code: string }).code).toBe(SessionErrorCode.NO_ACTIVE_SESSION);
-	});
-});
-
-describe('Session API - Full Game Flow', () => {
-	it('should complete a full session lifecycle: start → answer → end', async () => {
-		// 1. Start session
-		const { sessionId, data } = await startSession();
-		expect(sessionId).toBeTruthy();
-		expect(data.questions).toHaveLength(15);
-
-		// 2. Submit an answer
-		const { status: answerStatus, body: answerBody } = await submitAnswer(sessionId, 0, 1, 3000);
-		expect(answerStatus).toBe(200);
-		const answerResponse = answerBody as ApiSubmitAnswerResponse;
-		expect(answerResponse).toHaveProperty('isCorrect');
-		expect(answerResponse).toHaveProperty('lives');
-		expect(answerResponse).toHaveProperty('score');
-
-		// 3. Restore session (should work mid-game)
-		const { status: restoreStatus } = await restoreSession(sessionId);
-		expect(restoreStatus).toBe(200);
-
-		// 4. End session
-		const { status: endStatus, body: endBody } = await endSession(sessionId);
-		expect(endStatus).toBe(200);
-		expect(endBody.message).toBe('Session ended and memory cleared');
-
-		// 5. Verify session is cleared
-		const { status: restoreAfterEndStatus } = await restoreSession(sessionId);
-		expect(restoreAfterEndStatus).toBe(404);
-	});
-
-	it('should maintain session state across multiple answers', async () => {
-		const { sessionId } = await startSession();
-
-		// Submit first answer
-		const { body: first } = await submitAnswer(sessionId, 0, 1);
-		const firstResponse = first as ApiSubmitAnswerResponse;
-		const initialLives = firstResponse.lives;
-
-		// If first was correct, submit for question 1; if wrong, submit for question 0 again
-		const nextQuestion = firstResponse.isCorrect ? 1 : 0;
-		const { body: second } = await submitAnswer(sessionId, nextQuestion, 2);
-		const secondResponse = second as ApiSubmitAnswerResponse;
-
-		// Verify state is maintained
-		expect(typeof secondResponse.lives).toBe('number');
-		expect(typeof secondResponse.score).toBe('number');
-
-		// Lives should be same or less
-		expect(secondResponse.lives).toBeLessThanOrEqual(initialLives);
+		const sessionState = await getSessionStateOrFail(sessionId);
+		expect(sessionState.currentQuestion).toBe(1);
 	});
 });
 
-describe('Session API - Edge Cases', () => {
-	it('should handle concurrent session starts', async () => {
-		const promises = Array(5)
-			.fill(null)
-			.map(() => startSession());
-		const results = await Promise.all(promises);
+describe('concurrent operations', () => {
+	it('handles concurrent session starts', async () => {
+		const results = await Promise.all(Array.from({ length: 5 }, () => getApi().startSession()));
 
-		// All should succeed with unique session IDs
-		const sessionIds = results.map((r) => r.sessionId);
-		const uniqueIds = new Set(sessionIds);
-		expect(uniqueIds.size).toBe(5);
-	});
+		const successfulResults = results.filter((r) => r.success);
+		expect(successfulResults).toHaveLength(5);
 
-	it('should handle very large brandId gracefully', async () => {
-		const { sessionId } = await startSession();
-
-		const { status, body } = await submitAnswer(sessionId, 0, Number.MAX_SAFE_INTEGER);
-
-		// Should not crash, should return valid response
-		expect(status).toBe(200);
-		const response = body as ApiSubmitAnswerResponse;
-		expect(response.isCorrect).toBe(false); // Definitely wrong answer
-	});
-
-	it('should handle zero timeTaken', async () => {
-		const { sessionId } = await startSession();
-
-		const { status } = await submitAnswer(sessionId, 0, 1, 0);
-
-		expect(status).toBe(200);
-	});
-
-	it('should handle missing timeTaken field', async () => {
-		const { sessionId } = await startSession();
-
-		const request = new Request('http://example.com/session/answer', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				session_id: sessionId,
-			},
-			body: JSON.stringify({ questionNumber: 0, brandId: 1 }), // No timeTaken
-		});
-
-		const response = await SELF.fetch(request);
-		expect(response.status).toBe(200);
-	});
-
-	it('should return proper content-type header', async () => {
-		const request = new Request('http://example.com/session/start', { method: 'GET' });
-		const response = await SELF.fetch(request);
-
-		expect(response.headers.get('Content-Type')).toContain('application/json');
-	});
-
-	it('should handle empty string session_id', async () => {
-		const request = new Request('http://example.com/session/answer', {
-			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json',
-				session_id: '',
-			},
-			body: JSON.stringify({ questionNumber: 0, brandId: 1 }),
-		});
-
-		const response = await SELF.fetch(request);
-		// Empty string should be treated as missing or invalid
-		expect(response.status).toBe(400);
-	});
-});
-
-describe('Session API - HTTP Methods', () => {
-	it('should return 404 for non-existent routes', async () => {
-		const request = new Request('http://example.com/nonexistent', { method: 'GET' });
-		const response = await SELF.fetch(request);
-
-		expect(response.status).toBe(404);
-	});
-
-	it('should reject POST on /session/start', async () => {
-		const request = new Request('http://example.com/session/start', { method: 'POST' });
-		const response = await SELF.fetch(request);
-
-		// Hono returns 404 for wrong method by default
-		expect(response.status).toBe(404);
-	});
-
-	it('should reject GET on /session/answer', async () => {
-		const { sessionId } = await startSession();
-
-		const request = new Request('http://example.com/session/answer', {
-			method: 'GET',
-			headers: { session_id: sessionId },
-		});
-		const response = await SELF.fetch(request);
-
-		expect(response.status).toBe(404);
-	});
-
-	it('should reject POST on /session/end', async () => {
-		const { sessionId } = await startSession();
-
-		const request = new Request('http://example.com/session/end', {
-			method: 'POST',
-			headers: { session_id: sessionId },
-		});
-		const response = await SELF.fetch(request);
-
-		expect(response.status).toBe(404);
-	});
-
-	it('should reject POST on /session/restore', async () => {
-		const { sessionId } = await startSession();
-
-		const request = new Request('http://example.com/session/restore', {
-			method: 'POST',
-			headers: { session_id: sessionId },
-		});
-		const response = await SELF.fetch(request);
-
-		expect(response.status).toBe(404);
-	});
-});
-
-describe('Session API - CORS', () => {
-	it('should include CORS headers in response', async () => {
-		const request = new Request('http://example.com/session/start', { method: 'GET' });
-		const response = await SELF.fetch(request);
-
-		// Check for common CORS headers (adjust based on your CORS_OPTIONS)
-		expect(response.headers.has('Access-Control-Allow-Origin')).toBe(true);
-	});
-
-	it('should handle OPTIONS preflight request', async () => {
-		const request = new Request('http://example.com/session/start', {
-			method: 'OPTIONS',
-			headers: {
-				Origin: 'http://localhost:3000',
-				'Access-Control-Request-Method': 'GET',
-			},
-		});
-		const response = await SELF.fetch(request);
-
-		// Preflight should return 204 or 200
-		expect([200, 204]).toContain(response.status);
+		const sessionIds = successfulResults.map((r) => (r.success ? r.data.sessionId : null));
+		expect(new Set(sessionIds).size).toBe(5);
 	});
 });

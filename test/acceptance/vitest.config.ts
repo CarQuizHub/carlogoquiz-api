@@ -3,7 +3,6 @@ import path from 'path';
 import { defineWorkersConfig, readD1Migrations } from '@cloudflare/vitest-pool-workers/config';
 
 export default defineWorkersConfig(async () => {
-	// Read SQL migration files from the "migrations" directory
 	const migrationsPath = path.join(__dirname, '../../migrations');
 	const migrations = await readD1Migrations(migrationsPath);
 
@@ -25,7 +24,6 @@ export default defineWorkersConfig(async () => {
 						},
 						bindings: {
 							TEST_MIGRATIONS: migrations,
-							EXPOSE_HTTP: true,
 						},
 					},
 				},

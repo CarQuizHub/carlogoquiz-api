@@ -1,232 +1,275 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 vi.mock('../../src/utils', async () => {
-	const actual = await vi.importActual<any>('../../src/utils');
+	const actual = await vi.importActual<typeof import('../../src/utils')>('../../src/utils');
 	return {
 		...actual,
-		generateLogoUrl: vi.fn((mediaId: string, incorrect: boolean, baseUrl: string) => `${baseUrl}/${mediaId}${incorrect ? '_wrong' : ''}`),
+		generateLogoUrl: vi.fn((mediaId: string, isHidden: boolean, baseUrl: string) => `${baseUrl}/${mediaId}${isHidden ? '_hidden' : ''}`),
 		calculateLogoQuizScore: vi.fn(() => 10),
 		calculateTimeTakenBonus: vi.fn(() => 5),
 	};
 });
 
 import { handleSubmitAnswer } from '../../src/handlers/submitAnswerHandler';
-import type { SessionData, Bindings, AnswerRequest } from '../../src/types';
-import { SessionErrorCode } from '../../src/types';
 import { calculateTimeTakenBonus } from '../../src/utils';
+import type { SessionData, AnswerRequest, StoredQuestion } from '../../src/types';
+import { SessionErrorCode } from '../../src/types';
 
 const DO_ID = 'do-id-123';
 const MEDIA_BASE_URL = 'https://cdn.example.com';
 
 describe('handleSubmitAnswer', () => {
-	let fakeSession: any;
-	let fakeEnv: Bindings;
+	let fakeSession: {
+		sessionData: SessionData | null;
+		state: { id: { toString: () => string } };
+		save: ReturnType<typeof vi.fn>;
+		clear: ReturnType<typeof vi.fn>;
+	};
+	let mockQuestions: StoredQuestion[];
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 
-		fakeEnv = {
-			MEDIA_BASE_URL,
-			PRODUCTION: false,
-		} as any;
+		mockQuestions = [
+			{ logo: 'logo1.png', brandId: 1, difficulty: 2, mediaId: 'media1' },
+			{ logo: 'logo2.png', brandId: 2, difficulty: 3, mediaId: 'media2' },
+		];
 
 		fakeSession = {
-			env: fakeEnv,
 			sessionData: {
 				score: 0,
 				lives: 3,
 				currentQuestion: 0,
-				questions: {
-					0: { logo: 'logo1.png', brandId: 1, difficulty: 2, mediaId: 'media1' },
-					1: { logo: 'logo2.png', brandId: 2, difficulty: 3, mediaId: 'media2' },
-				},
-			} as SessionData,
-			state: {
-				id: { toString: () => DO_ID },
-				storage: {
-					put: vi.fn().mockResolvedValue(undefined),
-					deleteAll: vi.fn().mockResolvedValue(undefined),
-				},
+				questions: mockQuestions,
 			},
-		} as any;
+			state: { id: { toString: () => DO_ID } },
+			save: vi.fn().mockResolvedValue(undefined),
+			clear: vi.fn().mockImplementation(async () => {
+				fakeSession.sessionData = null;
+			}),
+		};
 	});
 
-	it('processes a correct answer and updates session (stores under key "state")', async () => {
-		const answerData: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: null };
-		const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
+	describe('correct answers', () => {
+		it('processes correct answer and updates session', async () => {
+			const answerData: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: null };
 
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data).toEqual({
-				isCorrect: true,
-				lives: 3,
-				score: 10,
-				logo: 'https://cdn.example.com/media1',
-			});
-		}
+			const result = await handleSubmitAnswer(fakeSession as any, answerData, MEDIA_BASE_URL);
 
-		expect(fakeSession.state.storage.put).toHaveBeenCalledWith('state', expect.any(Object));
-		expect(fakeSession.state.storage.deleteAll).not.toHaveBeenCalled();
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.isCorrect).toBe(true);
+				expect(result.data.lives).toBe(3);
+				expect(result.data.score).toBe(10);
+				expect(result.data.logo).toBe('https://cdn.example.com/media1');
+			}
+
+			expect(fakeSession.sessionData?.currentQuestion).toBe(1);
+			expect(fakeSession.save).toHaveBeenCalledTimes(1);
+			expect(fakeSession.clear).not.toHaveBeenCalled();
+		});
+
+		it('completes game on final correct answer and clears session', async () => {
+			// Answer first question
+			await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+
+			// Answer final question
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 1, brandId: 2, timeTaken: 500 }, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.isCorrect).toBe(true);
+				expect(result.data.score).toBe(25); // 10 + 10 + 5 bonus
+			}
+
+			expect(fakeSession.clear).toHaveBeenCalledTimes(1);
+			expect(fakeSession.sessionData).toBeNull();
+			expect(calculateTimeTakenBonus).toHaveBeenCalledWith(500);
+		});
+
+		it('does not apply time bonus when timeTaken is null on final question', async () => {
+			await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 1, brandId: 2, timeTaken: null }, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.score).toBe(20); // No bonus
+			}
+
+			expect(calculateTimeTakenBonus).not.toHaveBeenCalled();
+		});
+
+		it('does not apply time bonus when timeTaken is 0 on final question', async () => {
+			await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 1, brandId: 2, timeTaken: 0 }, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.score).toBe(20); // No bonus
+			}
+
+			expect(calculateTimeTakenBonus).not.toHaveBeenCalled();
+		});
 	});
 
-	it('processes an incorrect answer and updates session (stores under key "state")', async () => {
-		const answerData: AnswerRequest = { questionNumber: 0, brandId: 2, timeTaken: 5 };
-		const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
+	describe('incorrect answers', () => {
+		it('processes incorrect answer and decrements lives', async () => {
+			const answerData: AnswerRequest = { questionNumber: 0, brandId: 999, timeTaken: null };
 
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data).toEqual({
-				isCorrect: false,
-				lives: 2,
+			const result = await handleSubmitAnswer(fakeSession as any, answerData, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.isCorrect).toBe(false);
+				expect(result.data.lives).toBe(2);
+				expect(result.data.score).toBe(0);
+				expect(result.data.logo).toBe('https://cdn.example.com/media1_hidden');
+			}
+
+			expect(fakeSession.sessionData?.currentQuestion).toBe(0); // Does not advance
+			expect(fakeSession.save).toHaveBeenCalledTimes(1);
+		});
+
+		it('drops lives to 0 but does not clear session', async () => {
+			fakeSession.sessionData = {
 				score: 0,
-				logo: 'https://cdn.example.com/media1_wrong',
-			});
-		}
+				lives: 1,
+				currentQuestion: 0,
+				questions: mockQuestions,
+			};
 
-		expect(fakeSession.state.storage.put).toHaveBeenCalledWith('state', expect.any(Object));
-		expect(fakeSession.state.storage.deleteAll).not.toHaveBeenCalled();
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 999, timeTaken: null }, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(true);
+			if (result.success) {
+				expect(result.data.lives).toBe(0);
+				expect(result.data.isCorrect).toBe(false);
+			}
+
+			expect(fakeSession.sessionData).not.toBeNull();
+			expect(fakeSession.clear).not.toHaveBeenCalled();
+		});
+
+		it('returns GAME_OVER on subsequent submit after lives reach 0', async () => {
+			fakeSession.sessionData = {
+				score: 0,
+				lives: 0,
+				currentQuestion: 0,
+				questions: mockQuestions,
+			};
+
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.GAME_OVER);
+				expect(result.error.message).toBe('Game over');
+			}
+		});
 	});
 
-	it('completes session when final question is answered correctly (applies bonus + clears storage)', async () => {
-		const answerData1: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: 5 };
-		const result1 = await handleSubmitAnswer(fakeSession, answerData1, MEDIA_BASE_URL);
+	describe('validation errors', () => {
+		it('returns NO_ACTIVE_SESSION when sessionData is null', async () => {
+			fakeSession.sessionData = null;
 
-		expect(result1.success).toBe(true);
-		expect(fakeSession.sessionData.currentQuestion).toBe(1);
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
-		const answerData2: AnswerRequest = { questionNumber: 1, brandId: 2, timeTaken: 5 };
-		const result2 = await handleSubmitAnswer(fakeSession, answerData2, MEDIA_BASE_URL);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.NO_ACTIVE_SESSION);
+				expect(result.error.message).toBe('No active session');
+			}
+		});
 
-		expect(result2.success).toBe(true);
-		if (result2.success) {
-			expect(result2.data).toEqual({
-				isCorrect: true,
-				lives: 3,
-				score: 25,
-				logo: 'https://cdn.example.com/media2',
-			});
-		}
+		it('returns INVALID_INPUT_FORMAT when questionNumber is missing', async () => {
+			const result = await handleSubmitAnswer(fakeSession as any, { brandId: 1 } as AnswerRequest, MEDIA_BASE_URL);
 
-		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalledTimes(1);
-		expect(fakeSession.sessionData).toBeNull();
-		expect(calculateTimeTakenBonus).toHaveBeenCalledWith(5);
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.INVALID_INPUT_FORMAT);
+				expect(result.error.message).toBe('Invalid input format');
+			}
+		});
+
+		it('returns INVALID_INPUT_FORMAT when brandId is missing', async () => {
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0 } as AnswerRequest, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.INVALID_INPUT_FORMAT);
+				expect(result.error.message).toBe('Invalid input format');
+			}
+		});
+
+		it('returns INVALID_INPUT_FORMAT for empty object', async () => {
+			const result = await handleSubmitAnswer(fakeSession as any, {} as AnswerRequest, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.INVALID_INPUT_FORMAT);
+			}
+		});
+
+		it('returns INVALID_QUESTION_NUMBER when answering wrong question', async () => {
+			const result = await handleSubmitAnswer(
+				fakeSession as any,
+				{ questionNumber: 1, brandId: 2, timeTaken: null }, // currentQuestion is 0
+				MEDIA_BASE_URL,
+			);
+
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.INVALID_QUESTION_NUMBER);
+				expect(result.error.message).toBe('Invalid question number');
+			}
+		});
+
+		it('returns INVALID_QUESTION_NUMBER for negative question number', async () => {
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: -1, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.INVALID_QUESTION_NUMBER);
+			}
+		});
+
+		it('returns INVALID_QUESTION_NUMBER for out-of-bounds question', async () => {
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 99, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.INVALID_QUESTION_NUMBER);
+			}
+		});
 	});
 
-	it('does not apply bonus when final question timeTaken is null', async () => {
-		const answerData1: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: 5 };
-		await handleSubmitAnswer(fakeSession, answerData1, MEDIA_BASE_URL);
+	describe('error handling', () => {
+		it('returns INTERNAL_ERROR when save() throws', async () => {
+			fakeSession.save.mockRejectedValue(new Error('Storage failure'));
 
-		const answerData2: AnswerRequest = { questionNumber: 1, brandId: 2, timeTaken: null };
-		const result2 = await handleSubmitAnswer(fakeSession, answerData2, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
-		expect(result2.success).toBe(true);
-		if (result2.success) {
-			expect(result2.data.score).toBe(20);
-		}
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.INTERNAL_ERROR);
+				expect(result.error.message).toBe('Failed to submit answer');
+			}
+		});
 
-		expect(calculateTimeTakenBonus).not.toHaveBeenCalled();
-		expect(fakeSession.state.storage.deleteAll).toHaveBeenCalledTimes(1);
-	});
+		it('returns INTERNAL_ERROR when clear() throws on game completion', async () => {
+			await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
-	it('returns INTERNAL_ERROR when storage.put fails during update', async () => {
-		fakeSession.state.storage.put.mockRejectedValueOnce(new Error('storage write failed'));
+			fakeSession.clear.mockRejectedValue(new Error('Clear failure'));
 
-		const answerData: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: null };
-		const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 1, brandId: 2, timeTaken: 500 }, MEDIA_BASE_URL);
 
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe(SessionErrorCode.INTERNAL_ERROR);
-			expect(result.error.message).toBe('Failed to submit answer');
-		}
-	});
-
-	it('returns INTERNAL_ERROR when deleteAll fails during completion', async () => {
-		const answerData1: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: 5 };
-		await handleSubmitAnswer(fakeSession, answerData1, MEDIA_BASE_URL);
-
-		fakeSession.state.storage.deleteAll.mockRejectedValueOnce(new Error('delete failed'));
-
-		const answerData2: AnswerRequest = { questionNumber: 1, brandId: 2, timeTaken: 5 };
-		const result2 = await handleSubmitAnswer(fakeSession, answerData2, MEDIA_BASE_URL);
-
-		expect(result2.success).toBe(false);
-		if (!result2.success) {
-			expect(result2.error.code).toBe(SessionErrorCode.INTERNAL_ERROR);
-			expect(result2.error.message).toBe('Failed to submit answer');
-		}
-
-		expect(fakeSession.sessionData).toBeNull();
-	});
-
-	it('returns an error when no active session exists', async () => {
-		fakeSession.sessionData = null;
-
-		const answerData: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: 5 };
-		const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
-
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe(SessionErrorCode.NO_ACTIVE_SESSION);
-			expect(result.error.message).toBe('No active session');
-		}
-	});
-
-	it('returns an error when the game is already over (lives <= 0 before submit)', async () => {
-		fakeSession.sessionData.lives = 0;
-
-		const answerData: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: 5 };
-		const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
-
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe(SessionErrorCode.GAME_OVER);
-			expect(result.error.message).toBe('Game over');
-		}
-	});
-
-	it('returns an error when request format is invalid', async () => {
-		const answerData = {} as AnswerRequest;
-		const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
-
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe(SessionErrorCode.INVALID_INPUT_FORMAT);
-			expect(result.error.message).toBe('Invalid input format');
-		}
-	});
-
-	it('returns an error when answering an invalid question (wrong currentQuestion)', async () => {
-		const answerData: AnswerRequest = { questionNumber: 1, brandId: 2, timeTaken: 5 };
-		const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
-
-		expect(result.success).toBe(false);
-		if (!result.success) {
-			expect(result.error.code).toBe(SessionErrorCode.INVALID_QUESTION_NUMBER);
-			expect(result.error.message).toBe('Invalid question number');
-		}
-	});
-
-	it('drops lives to 0 on incorrect answer but does not auto-clear session (current behavior)', async () => {
-		fakeSession.sessionData.lives = 1;
-
-		const answerData: AnswerRequest = { questionNumber: 0, brandId: 2, timeTaken: null };
-		const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
-
-		expect(result.success).toBe(true);
-		if (result.success) {
-			expect(result.data.lives).toBe(0);
-			expect(result.data.isCorrect).toBe(false);
-		}
-
-		expect(fakeSession.state.storage.put).toHaveBeenCalledWith('state', expect.any(Object));
-		expect(fakeSession.state.storage.deleteAll).not.toHaveBeenCalled();
-		expect(fakeSession.sessionData).not.toBeNull();
-
-		const next = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
-		expect(next.success).toBe(false);
-		if (!next.success) {
-			expect(next.error.code).toBe(SessionErrorCode.GAME_OVER);
-		}
+			expect(result.success).toBe(false);
+			if (!result.success) {
+				expect(result.error.code).toBe(SessionErrorCode.INTERNAL_ERROR);
+				expect(result.error.message).toBe('Failed to submit answer');
+			}
+		});
 	});
 });
