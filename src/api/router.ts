@@ -1,10 +1,12 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
-import { Bindings } from '../types';
+
+import { Bindings, AnswerRequest } from '../types';
 import { CORS_OPTIONS } from '../config/constants';
 import { createJsonResponse } from '../api/response';
 import { logError } from '../utils/loggingUtils';
-import { handleSessionDurableObject } from '../handlers/durableObjectHandler';
+import { QuizApi } from '../services/quizApi';
+import { resultToResponse } from '../utils/resultToResponse';
 
 const app = new Hono<{ Bindings: Bindings }>();
 
@@ -16,19 +18,45 @@ app.onError((err, c) => {
 	return createJsonResponse({ error: 'Internal Server Error' }, 500);
 });
 
-// Route to start a session.
 app.get('/session/start', async (c) => {
-	return await handleSessionDurableObject(c, true, (stub) => stub.startSession());
+	const api = new QuizApi(c.env);
+	const result = await api.startSession();
+
+	return resultToResponse(result);
 });
 
-// Route to end a session.
+app.get('/session/restore', async (c) => {
+	const sessionId = c.req.header('session_id');
+	if (!sessionId) return createJsonResponse({ error: 'Missing session_id header' }, 400);
+
+	const api = new QuizApi(c.env);
+	const result = await api.restoreSession(sessionId);
+	return resultToResponse(result);
+});
+
 app.get('/session/end', async (c) => {
-	return await handleSessionDurableObject(c, false, (stub) => stub.endSession());
+	const sessionId = c.req.header('session_id');
+	if (!sessionId) return createJsonResponse({ error: 'Missing session_id header' }, 400);
+
+	const api = new QuizApi(c.env);
+	const result = await api.endSession(sessionId);
+	return resultToResponse(result);
 });
 
-// Route to submit answer to a question stored in session.
 app.post('/session/answer', async (c) => {
-	return await handleSessionDurableObject(c, false, (stub) => stub.submitAnswer(c.req.raw));
+	const sessionId = c.req.header('session_id');
+	if (!sessionId) return createJsonResponse({ error: 'Missing session_id header' }, 400);
+
+	let body: AnswerRequest;
+	try {
+		body = await c.req.json<AnswerRequest>();
+	} catch {
+		return createJsonResponse({ error: 'Invalid JSON body' }, 400);
+	}
+
+	const api = new QuizApi(c.env);
+	const result = await api.submitAnswer(sessionId, body);
+	return resultToResponse(result);
 });
 
 export default app;

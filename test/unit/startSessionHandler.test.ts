@@ -1,14 +1,21 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { handleStartSession } from '../../src/handlers/startSessionHandler';
 import { fetchBrands } from '../../src/repositories/brandRepository';
 import * as LogoUtils from '../../src/utils/logoUtils';
-import type { StoredQuestion, SessionData, Brand, Bindings, ApiStartSessionResponse } from '../../src/types';
+import type { SessionContext } from '../../src/types/session';
+import type { StoredQuestion, Brand, Bindings } from '../../src/types';
+import { SessionErrorCode } from '../../src/types';
 
 vi.mock('../../src/repositories/brandRepository', () => ({ fetchBrands: vi.fn() }));
 vi.mock('../../src/utils/logoUtils', () => ({ generateLogoQuestions: vi.fn() }));
 
+const DO_ID = 'do-id-123';
+
 describe('handleStartSession', () => {
-	let fakeSession: any;
+	let fakeSession: SessionContext & {
+		save: ReturnType<typeof vi.fn>;
+	};
 	let fakeEnv: Bindings;
 	let mockBrands: Brand[];
 	let mockQuestions: StoredQuestion[];
@@ -30,76 +37,119 @@ describe('handleStartSession', () => {
 			MEDIA_BASE_URL: 'https://cdn.example.com',
 			PRODUCTION: false,
 			BRANDS_CACHE_DURATION: '600',
-			BRANDS_KV: {
-				get: vi.fn(),
-				put: vi.fn(),
-			} as any,
-			DB: {
-				prepare: vi.fn(() => ({ all: vi.fn().mockResolvedValue({ results: mockBrands }) })),
-			} as any,
+			BRANDS_KV: {} as any,
+			DB: {} as any,
 			SESSION: {} as any,
-		};
+		} as Bindings;
 
 		fakeSession = {
-			sessionId: 'test-session',
+			sessionId: DO_ID,
 			sessionData: null,
-			state: { storage: { put: vi.fn().mockResolvedValue(undefined) } },
-		} as any;
+			save: vi.fn().mockResolvedValue(undefined),
+			clear: vi.fn().mockResolvedValue(undefined),
+		};
 	});
-
-	const testStartSession = async (expectedStatus: number, expectedData: any) => {
-		const response = await handleStartSession(fakeSession, fakeEnv);
-		const data = await response.json();
-		expect(response.status).toBe(expectedStatus);
-		expect(data).toEqual(expectedData);
-	};
 
 	it('starts a new session successfully', async () => {
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 		(LogoUtils.generateLogoQuestions as any).mockReturnValue(mockQuestions);
 
-		await testStartSession(200, {
-			brands: mockBrands.map(({ id, brand_name }) => ({ id, brand_name })),
-			questions: mockQuestions.map(({ logo }) => ({ question: { logo } })),
-		});
+		const result = await handleStartSession(fakeSession, fakeEnv);
 
-		expect(fakeSession.state.storage.put).toHaveBeenCalledWith(
-			`session-${fakeSession.sessionId}`,
-			expect.objectContaining({ questions: expect.any(Object) }),
-		);
-	});
+		expect(result.success).toBe(true);
+		if (result.success) {
+			expect(result.data.brands).toEqual([
+				{ id: 1, brand_name: 'Brand A' },
+				{ id: 2, brand_name: 'Brand B' },
+			]);
+			expect(result.data.questions).toEqual([{ question: { logo: 'logo1.png' } }, { question: { logo: 'logo2.png' } }]);
+		}
 
-	it('restores session when session data exists', async () => {
-		fakeSession.sessionData = {
+		expect(fakeSession.sessionData).toEqual({
 			score: 0,
 			lives: 3,
 			currentQuestion: 0,
-			questions: {
-				0: { logo: 'logo1.png', brandId: 1, difficulty: 2, mediaId: 'media1' },
-			},
-		} as SessionData;
+			questions: mockQuestions,
+		});
+
+		expect(fakeSession.save).toHaveBeenCalledTimes(1);
+		expect(fetchBrands).toHaveBeenCalledWith(fakeEnv, DO_ID);
+		expect(LogoUtils.generateLogoQuestions).toHaveBeenCalledWith(mockBrands, fakeEnv.MEDIA_BASE_URL);
+	});
+
+	it('overwrites existing sessionData on new start', async () => {
+		fakeSession.sessionData = {
+			score: 999,
+			lives: 1,
+			currentQuestion: 7,
+			questions: [{ logo: 'old.png', brandId: 99, difficulty: 9, mediaId: 'old' }],
+		};
 
 		(fetchBrands as any).mockResolvedValue(mockBrands);
+		(LogoUtils.generateLogoQuestions as any).mockReturnValue(mockQuestions);
 
-		await testStartSession(200, {
-			brands: mockBrands.map(({ id, brand_name }) => ({ id, brand_name })),
-			questions: [{ question: { logo: 'logo1.png' } }],
-		});
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(true);
+		expect(fakeSession.sessionData.score).toBe(0);
+		expect(fakeSession.sessionData.lives).toBe(3);
+		expect(fakeSession.sessionData.currentQuestion).toBe(0);
+		expect(fakeSession.sessionData.questions).toEqual(mockQuestions);
 	});
 
-	it('returns an error when no brands are available', async () => {
+	it('returns NO_BRANDS_AVAILABLE when fetchBrands returns empty array', async () => {
 		(fetchBrands as any).mockResolvedValue([]);
-		await testStartSession(400, { error: 'No brands available' });
+
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe(SessionErrorCode.NO_BRANDS_AVAILABLE);
+			expect(result.error.message).toBe('No brands available');
+		}
+
+		expect(LogoUtils.generateLogoQuestions).not.toHaveBeenCalled();
+		expect(fakeSession.save).not.toHaveBeenCalled();
 	});
 
-	it('returns an error when no questions are generated', async () => {
+	it('returns NO_QUESTIONS_AVAILABLE when generateLogoQuestions returns empty array', async () => {
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 		(LogoUtils.generateLogoQuestions as any).mockReturnValue([]);
-		await testStartSession(400, { error: 'No questions available' });
+
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe(SessionErrorCode.NO_QUESTIONS_AVAILABLE);
+			expect(result.error.message).toBe('No questions available');
+		}
+
+		expect(fakeSession.save).not.toHaveBeenCalled();
 	});
 
-	it('handles unexpected errors gracefully', async () => {
+	it('returns INTERNAL_ERROR when fetchBrands throws', async () => {
 		(fetchBrands as any).mockRejectedValue(new Error('Database failure'));
-		await testStartSession(500, { error: 'Error: Failed to start session' });
+
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe(SessionErrorCode.INTERNAL_ERROR);
+			expect(result.error.message).toBe('Failed to start session');
+		}
+	});
+
+	it('returns INTERNAL_ERROR when save() throws', async () => {
+		(fetchBrands as any).mockResolvedValue(mockBrands);
+		(LogoUtils.generateLogoQuestions as any).mockReturnValue(mockQuestions);
+		fakeSession.save.mockRejectedValue(new Error('Storage failure'));
+
+		const result = await handleStartSession(fakeSession, fakeEnv);
+
+		expect(result.success).toBe(false);
+		if (!result.success) {
+			expect(result.error.code).toBe(SessionErrorCode.INTERNAL_ERROR);
+			expect(result.error.message).toBe('Failed to start session');
+		}
 	});
 });

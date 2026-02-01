@@ -26,6 +26,6 @@ export interface ApiSubmitAnswerResponse {
 	logo: string;
 }
 
-export interface ApiErrorResponse {
-	error: string;
+export interface ApiStartSessionResponseWithId extends ApiStartSessionResponse {
+	sessionId: string;
 }

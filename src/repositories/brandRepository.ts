@@ -16,8 +16,11 @@ export async function fetchBrands(env: Bindings, sessionId: string): Promise<Bra
 		const { results: brands }: { results: Brand[] } = await env.DB.prepare(brandsQuery).all();
 		logInfo('fetch_brands_success', sessionId, { brandCount: brands.length });
 
-		await env.BRANDS_KV.put(cacheKey, JSON.stringify(brands), { expirationTtl: cacheDuration });
-
+		try {
+			await env.BRANDS_KV.put(cacheKey, JSON.stringify(brands), { expirationTtl: cacheDuration });
+		} catch (cacheError) {
+			logError('fetch_brands_cache_write_error', sessionId, cacheError);
+		}
 		return brands;
 	} catch (error) {
 		logError('fetch_brands_error', sessionId, error);

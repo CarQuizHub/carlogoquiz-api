@@ -1,5 +1,6 @@
-import { Session } from './durableObjects/session';
-import app from './api/router';
+import { ApiWorker } from './worker/apiWorker';
 
-export { Session };
-export default app;
+export { Session } from './durableObjects/session';
+export { default as honoApp } from './api/router';
+
+export default ApiWorker;

@@ -1,13 +1,20 @@
 {
-	"name": "carlogoquiz-api-dev",
-	"workers_dev": true,
+	"$schema": "./node_modules/wrangler/config-schema.json",
+	"name": "carlogoquiz-api",
 	"main": "src/index.ts",
 	"compatibility_date": "2025-01-29",
 	"upload_source_maps": true,
+	"workers_dev": false,
+	"vars": {
+		"MEDIA_BASE_URL": "https://my-production-r2-bucket-url",
+		"PRODUCTION": true,
+		"BRANDS_CACHE_DURATION": "604800",
+		"EXPOSE_HTTP": false
+	},
 	"migrations": [
 		{
 			"tag": "v1",
-			"new_classes": ["Session"]
+			"new_sqlite_classes": ["Session"]
 		}
 	],
 	"durable_objects": {
@@ -21,18 +28,31 @@
 	"observability": {
 		"enabled": true
 	},
+	"kv_namespaces": [
+		{
+			"binding": "BRANDS_KV",
+			"id": "my-prod-kv-id"
+		}
+	],
+	"d1_databases": [
+		{
+			"binding": "DB",
+			"database_name": "CarQuizHub",
+			"database_id": "my-production-database-id",
+			"migrations_table": "d1_migrations",
+			"migrations_dir": "migrations"
+		}
+	],
 	"env": {
 		"dev": {
+			"workers_dev": false,
 			"name": "carlogoquiz-api-dev",
-			"workers_dev": true,
-			"assets": {
-				"directory": "./assets"
-			},
-			"vars": {
-				"MEDIA_BASE_URL": "http://localhost:8787",
-				"PRODUCTION": "false",
-				"BRANDS_CACHE_DURATION": "10"
-			},
+			"migrations": [
+				{
+					"tag": "v1",
+					"new_sqlite_classes": ["Session"]
+				}
+			],
 			"durable_objects": {
 				"bindings": [
 					{
@@ -40,6 +60,15 @@
 						"class_name": "Session"
 					}
 				]
+			},
+			"assets": {
+				"directory": "./assets"
+			},
+			"vars": {
+				"MEDIA_BASE_URL": "http://localhost:8787",
+				"PRODUCTION": false,
+				"BRANDS_CACHE_DURATION": "60",
+				"EXPOSE_HTTP": true
 			},
 			"kv_namespaces": [
 				{
@@ -57,14 +86,15 @@
 				}
 			]
 		},
-		"production": {
-			"name": "carlogoquiz-api",
-			"workers_dev": false,
-			"vars": {
-				"MEDIA_BASE_URL": "https://my-production-r2-bucket-url",
-				"PRODUCTION": true,
-				"BRANDS_CACHE_DURATION": "604800"
-			},
+		"staging": {
+			"workers_dev": true,
+			"name": "carlogoquiz-api-staging",
+			"migrations": [
+				{
+					"tag": "v1",
+					"new_sqlite_classes": ["Session"]
+				}
+			],
 			"durable_objects": {
 				"bindings": [
 					{
@@ -73,17 +103,23 @@
 					}
 				]
 			},
+			"vars": {
+				"MEDIA_BASE_URL": "https://my-staging-r2-bucket-url",
+				"PRODUCTION": false,
+				"BRANDS_CACHE_DURATION": "600",
+				"EXPOSE_HTTP": true
+			},
 			"kv_namespaces": [
 				{
 					"binding": "BRANDS_KV",
-					"id": "my-prod-kv-id"
+					"id": "my-staging-kv-id"
 				}
 			],
 			"d1_databases": [
 				{
 					"binding": "DB",
-					"database_name": "CarQuizHub",
-					"database_id": "my-production-database-id",
+					"database_name": "CarQuizHub-staging",
+					"database_id": "my-staging-d1-id",
 					"migrations_table": "d1_migrations",
 					"migrations_dir": "migrations"
 				}
