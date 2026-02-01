@@ -1,74 +1,148 @@
-import { describe, it, expect, vi } from 'vitest';
+import { describe, it, expect, vi, beforeEach } from 'vitest';
+
 import { fetchBrands } from '../../src/repositories/brandRepository';
 import type { Brand, Bindings } from '../../src/types';
-import { D1Database } from '@cloudflare/workers-types';
 
 const SESSION_ID = 'test-session';
+
 const MOCK_BRANDS: Brand[] = [
 	{ id: 1, brand_name: 'Brand A', difficulty: 2, media_id: 'media-1' },
 	{ id: 2, brand_name: 'Brand B', difficulty: 3, media_id: 'media-2' },
 ];
-const MOCK_ENV: Bindings = {
-	MEDIA_BASE_URL: 'https://cdn.example.com',
-	PRODUCTION: false,
-	BRANDS_CACHE_DURATION: '600',
-	BRANDS_KV: {
-		get: vi.fn().mockResolvedValue(null),
-		put: vi.fn().mockResolvedValue(undefined),
-	} as any,
-	DB: {
-		prepare: vi.fn(),
-	} as unknown as D1Database,
-	SESSION: {} as any,
-};
 
 describe('fetchBrands', () => {
-	it('returns cached brands if available', async () => {
-		(MOCK_ENV.BRANDS_KV.get as any).mockImplementation(() => Promise.resolve(MOCK_BRANDS));
+	let mockEnv: Bindings;
+	let kvGet: ReturnType<typeof vi.fn>;
+	let kvPut: ReturnType<typeof vi.fn>;
+	let dbPrepare: ReturnType<typeof vi.fn>;
+	let dbAll: ReturnType<typeof vi.fn>;
 
-		const brands = await fetchBrands(MOCK_ENV, SESSION_ID);
+	beforeEach(() => {
+		vi.clearAllMocks();
 
-		expect(MOCK_ENV.BRANDS_KV.get).toHaveBeenCalledWith('brands', 'json');
-		expect(MOCK_ENV.DB.prepare).not.toHaveBeenCalled();
-		expect(brands).toEqual(MOCK_BRANDS);
+		kvGet = vi.fn().mockResolvedValue(null);
+		kvPut = vi.fn().mockResolvedValue(undefined);
+		dbAll = vi.fn().mockResolvedValue({ results: MOCK_BRANDS });
+		dbPrepare = vi.fn().mockReturnValue({ all: dbAll });
+
+		mockEnv = {
+			MEDIA_BASE_URL: 'https://cdn.example.com',
+			PRODUCTION: false,
+			BRANDS_CACHE_DURATION: '600',
+			BRANDS_KV: { get: kvGet, put: kvPut } as any,
+			DB: { prepare: dbPrepare } as any,
+			SESSION: {} as any,
+			EXPOSE_HTTP: false,
+		};
 	});
 
-	it('fetches from the database if cache is empty', async () => {
-		(MOCK_ENV.BRANDS_KV.get as any).mockImplementation(() => Promise.resolve(null));
+	describe('cache behavior', () => {
+		it('returns cached brands when available', async () => {
+			kvGet.mockResolvedValue(MOCK_BRANDS);
 
-		(MOCK_ENV.DB.prepare as any).mockReturnValue({
-			all: vi.fn().mockResolvedValue({ results: MOCK_BRANDS }),
+			const brands = await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(kvGet).toHaveBeenCalledWith('brands', 'json');
+			expect(dbPrepare).not.toHaveBeenCalled();
+			expect(brands).toEqual(MOCK_BRANDS);
 		});
 
-		const brands = await fetchBrands(MOCK_ENV, SESSION_ID);
+		it('fetches from database when cache is empty', async () => {
+			kvGet.mockResolvedValue(null);
 
-		expect(MOCK_ENV.BRANDS_KV.get).toHaveBeenCalledWith('brands', 'json');
-		expect(MOCK_ENV.DB.prepare).toHaveBeenCalledWith('SELECT id, brand_name, difficulty, media_id FROM brands;');
-		expect(brands).toEqual(MOCK_BRANDS);
+			const brands = await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(kvGet).toHaveBeenCalledWith('brands', 'json');
+			expect(dbPrepare).toHaveBeenCalledWith('SELECT id, brand_name, difficulty, media_id FROM brands;');
+			expect(brands).toEqual(MOCK_BRANDS);
+		});
+
+		it('stores data in cache after database fetch', async () => {
+			kvGet.mockResolvedValue(null);
+
+			await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(kvPut).toHaveBeenCalledWith('brands', JSON.stringify(MOCK_BRANDS), { expirationTtl: 600 });
+		});
+
+		it('uses configured cache duration', async () => {
+			mockEnv.BRANDS_CACHE_DURATION = '3600';
+			kvGet.mockResolvedValue(null);
+
+			await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(kvPut).toHaveBeenCalledWith('brands', JSON.stringify(MOCK_BRANDS), { expirationTtl: 3600 });
+		});
+
+		it('uses default cache duration (1 week) when not configured', async () => {
+			mockEnv.BRANDS_CACHE_DURATION = '';
+			kvGet.mockResolvedValue(null);
+
+			await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(kvPut).toHaveBeenCalledWith('brands', JSON.stringify(MOCK_BRANDS), { expirationTtl: 604800 });
+		});
+
+		it('uses default cache duration when value is invalid', async () => {
+			mockEnv.BRANDS_CACHE_DURATION = 'invalid';
+			kvGet.mockResolvedValue(null);
+
+			await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(kvPut).toHaveBeenCalledWith('brands', JSON.stringify(MOCK_BRANDS), { expirationTtl: 604800 });
+		});
 	});
 
-	it('stores data in cache after DB fetch', async () => {
-		(MOCK_ENV.BRANDS_KV.get as any).mockImplementation(() => Promise.resolve(null));
+	describe('database behavior', () => {
+		it('returns empty array from database', async () => {
+			kvGet.mockResolvedValue(null);
+			dbAll.mockResolvedValue({ results: [] });
 
-		(MOCK_ENV.DB.prepare as any).mockReturnValue({
-			all: vi.fn().mockResolvedValue({ results: MOCK_BRANDS }),
+			const brands = await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(brands).toEqual([]);
+			expect(kvPut).toHaveBeenCalledWith('brands', '[]', { expirationTtl: 600 });
 		});
-
-		await fetchBrands(MOCK_ENV, SESSION_ID);
-
-		expect(MOCK_ENV.BRANDS_KV.put).toHaveBeenCalledWith('brands', JSON.stringify(MOCK_BRANDS), { expirationTtl: 600 });
 	});
 
-	it('returns an empty array if DB query fails', async () => {
-		(MOCK_ENV.BRANDS_KV.get as any).mockImplementation(() => Promise.resolve(null));
+	describe('error handling', () => {
+		it('returns empty array when KV.get throws', async () => {
+			kvGet.mockRejectedValue(new Error('KV read failed'));
 
-		(MOCK_ENV.DB.prepare as any).mockImplementation(() => {
-			throw new Error('DB connection failed');
+			const brands = await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(brands).toEqual([]);
+			expect(dbPrepare).not.toHaveBeenCalled();
 		});
 
-		const brands = await fetchBrands(MOCK_ENV, SESSION_ID);
+		it('returns empty array when DB.prepare throws', async () => {
+			kvGet.mockResolvedValue(null);
+			dbPrepare.mockImplementation(() => {
+				throw new Error('DB connection failed');
+			});
 
-		expect(MOCK_ENV.DB.prepare).toHaveBeenCalled();
-		expect(brands).toEqual([]);
+			const brands = await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(brands).toEqual([]);
+		});
+
+		it('returns empty array when DB.all throws', async () => {
+			kvGet.mockResolvedValue(null);
+			dbAll.mockRejectedValue(new Error('Query failed'));
+
+			const brands = await fetchBrands(mockEnv, SESSION_ID);
+
+			expect(brands).toEqual([]);
+		});
+
+		it('returns brands even when KV.put fails', async () => {
+			kvGet.mockResolvedValue(null);
+			kvPut.mockRejectedValue(new Error('KV write failed'));
+
+			const brands = await fetchBrands(mockEnv, SESSION_ID);
+
+			// Should still return brands despite cache write failure
+			expect(brands).toEqual(MOCK_BRANDS);
+		});
 	});
 });

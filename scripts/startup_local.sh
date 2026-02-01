@@ -59,5 +59,14 @@ else
     exit 1
 fi
 
-echo "to start a session locally, run the following command:"
-echo "curl -s http://127.0.0.1:8787/session/start | python -m json.tool or curl -s -i -H "session_id: {sessionId}" http://127.0.0.1:8787/session/start"
+echo "To start a NEW session locally:"
+echo "  curl -s http://127.0.0.1:8787/session/start | python -m json.tool"
+echo ""
+echo "To RESTORE an existing session locally (replace SESSION_ID):"
+echo "  curl -s -i -H 'session_id: SESSION_ID' http://127.0.0.1:8787/session/restore"
+echo ""
+echo "To SUBMIT an answer locally:"
+echo "  curl -s -X POST http://127.0.0.1:8787/session/answer -H 'Content-Type: application/json' -H 'session_id: SESSION_ID' -d '{\"questionNumber\":0,\"brandId\":1,\"timeTaken\":null}' | python -m json.tool"
+echo ""
+echo "To END a session locally:"
+echo "  curl -s -i -H 'session_id: SESSION_ID' http://127.0.0.1:8787/session/end"

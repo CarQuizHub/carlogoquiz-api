@@ -1,4 +1,5 @@
 import { DurableObjectNamespace } from '@cloudflare/workers-types';
+
 import { Session } from '../durableObjects/session';
 
 export interface Bindings {
@@ -8,4 +9,5 @@ export interface Bindings {
 	MEDIA_BASE_URL: string;
 	PRODUCTION: boolean;
 	BRANDS_CACHE_DURATION: string;
+	EXPOSE_HTTP: boolean;
 }
