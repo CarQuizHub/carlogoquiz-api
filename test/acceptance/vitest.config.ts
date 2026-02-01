@@ -8,6 +8,7 @@ export default defineWorkersConfig(async () => {
 
 	return {
 		test: {
+			name: 'acceptance',
 			globals: true,
 			setupFiles: [path.resolve(__dirname, './setup.ts'), path.resolve(__dirname, './testSetup.ts')],
 			poolOptions: {
