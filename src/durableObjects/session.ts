@@ -1,76 +1,66 @@
 import { DurableObject } from 'cloudflare:workers';
 
-import type { SessionData, Bindings, AnswerRequest, SubmitAnswerResult, EndSessionResult, Result, ApiStartSessionResponse } from '../types';
+import {
+	type SessionData,
+	type SessionContext,
+	type Bindings,
+	type AnswerRequest,
+	type SubmitAnswerResult,
+	type EndSessionResult,
+	type Result,
+	type ApiStartSessionResponse,
+	SESSION_STATE_KEY,
+} from '../types';
 import { handleStartSession } from '../handlers/startSessionHandler';
 import { handleRestoreSession } from '../handlers/restoreSessionHandler';
 import { handleSubmitAnswer } from '../handlers/submitAnswerHandler';
 import { handleEndSession } from '../handlers/endSessionHandler';
 import { logInfo } from '../utils/loggingUtils';
-import { loadSessionData, saveSessionData, clearSessionData } from '../stores/sessionStateStore';
 
-export class Session extends DurableObject {
-	public state: DurableObjectState;
-	public env: Bindings;
-
+export class Session extends DurableObject<Bindings> implements SessionContext {
 	public sessionData: SessionData | null = null;
 
-	private hydrated = false;
-	private hydrationPromise: Promise<void>;
+	constructor(ctx: DurableObjectState, env: Bindings) {
+		super(ctx, env);
 
-	constructor(state: DurableObjectState, env: Bindings) {
-		super(state, env);
-		this.state = state;
-		this.env = env;
-
-		this.hydrationPromise = state.blockConcurrencyWhile(async () => {
-			await this.hydrateFromStorage();
+		ctx.blockConcurrencyWhile(async () => {
+			const storedSession = await ctx.storage.get<SessionData>(SESSION_STATE_KEY);
+			this.sessionData = storedSession ?? null;
+			logInfo('session_initialized', ctx.id.toString(), { isRestored: !!storedSession });
 		});
 	}
 
-	private async hydrateFromStorage(): Promise<void> {
-		if (this.hydrated) return;
-
-		const storedSession = await loadSessionData(this.state);
-		this.sessionData = storedSession;
-		this.hydrated = true;
-
-		logInfo('session_initialized', this.state.id.toString(), { isRestored: !!storedSession });
-	}
-
-	private async ensureLoaded(): Promise<void> {
-		await this.hydrationPromise;
+	get sessionId(): string {
+		return this.ctx.id.toString();
 	}
 
 	async save(): Promise<void> {
 		if (!this.sessionData) return;
-		await saveSessionData(this.state, this.sessionData);
+		await this.ctx.storage.put(SESSION_STATE_KEY, this.sessionData);
 	}
 
 	async clear(): Promise<void> {
-		await clearSessionData(this.state);
+		await this.ctx.storage.deleteAll();
 		this.sessionData = null;
 	}
 
 	async startSession(): Promise<Result<ApiStartSessionResponse>> {
-		logInfo('session_start_request', this.state.id.toString());
+		logInfo('session_start_request', this.sessionId);
 		return handleStartSession(this, this.env);
 	}
 
 	async restoreSession(): Promise<Result<ApiStartSessionResponse>> {
-		await this.ensureLoaded();
-		logInfo('session_restore_request', this.state.id.toString());
+		logInfo('session_restore_request', this.sessionId);
 		return handleRestoreSession(this, this.env);
 	}
 
 	async submitAnswer(answerData: AnswerRequest): Promise<SubmitAnswerResult> {
-		await this.ensureLoaded();
-		logInfo('session_answer_request', this.state.id.toString());
+		logInfo('session_answer_request', this.sessionId);
 		return handleSubmitAnswer(this, answerData, this.env.MEDIA_BASE_URL);
 	}
 
 	async endSession(): Promise<EndSessionResult> {
-		await this.ensureLoaded();
-		logInfo('session_end_request', this.state.id.toString());
+		logInfo('session_end_request', this.sessionId);
 		return handleEndSession(this);
 	}
 }

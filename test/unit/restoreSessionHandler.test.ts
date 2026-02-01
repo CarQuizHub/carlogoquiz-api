@@ -2,7 +2,8 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 import { handleRestoreSession } from '../../src/handlers/restoreSessionHandler';
 import { fetchBrands } from '../../src/repositories/brandRepository';
-import type { Bindings, Brand, SessionData, StoredQuestion } from '../../src/types';
+import type { SessionContext } from '../../src/types/session';
+import type { Bindings, Brand, StoredQuestion } from '../../src/types';
 import { SessionErrorCode } from '../../src/types';
 
 vi.mock('../../src/repositories/brandRepository', () => ({ fetchBrands: vi.fn() }));
@@ -10,10 +11,7 @@ vi.mock('../../src/repositories/brandRepository', () => ({ fetchBrands: vi.fn() 
 const DO_ID = 'do-id-restore-123';
 
 describe('handleRestoreSession', () => {
-	let fakeSession: {
-		sessionData: SessionData | null;
-		state: { id: { toString: () => string } };
-	};
+	let fakeSession: SessionContext;
 	let fakeEnv: Bindings;
 	let mockBrands: Brand[];
 	let mockQuestions: StoredQuestion[];
@@ -41,8 +39,10 @@ describe('handleRestoreSession', () => {
 		} as Bindings;
 
 		fakeSession = {
+			sessionId: DO_ID,
 			sessionData: null,
-			state: { id: { toString: () => DO_ID } },
+			save: vi.fn().mockResolvedValue(undefined),
+			clear: vi.fn().mockResolvedValue(undefined),
 		};
 	});
 
@@ -56,7 +56,7 @@ describe('handleRestoreSession', () => {
 
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 
-		const result = await handleRestoreSession(fakeSession as any, fakeEnv);
+		const result = await handleRestoreSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(true);
 		if (result.success) {
@@ -73,7 +73,7 @@ describe('handleRestoreSession', () => {
 	it('returns SESSION_NOT_FOUND when sessionData is null', async () => {
 		fakeSession.sessionData = null;
 
-		const result = await handleRestoreSession(fakeSession as any, fakeEnv);
+		const result = await handleRestoreSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {
@@ -92,7 +92,7 @@ describe('handleRestoreSession', () => {
 			questions: [],
 		};
 
-		const result = await handleRestoreSession(fakeSession as any, fakeEnv);
+		const result = await handleRestoreSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {
@@ -113,7 +113,7 @@ describe('handleRestoreSession', () => {
 
 		(fetchBrands as any).mockRejectedValue(new Error('Database failure'));
 
-		const result = await handleRestoreSession(fakeSession as any, fakeEnv);
+		const result = await handleRestoreSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {

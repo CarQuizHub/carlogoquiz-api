@@ -1,15 +1,15 @@
+import type { SessionContext } from '../types/session';
+import type { Brand, StoredQuestion, Bindings, Result, ApiStartSessionResponse } from '../types';
+import { SessionErrorCode } from '../types';
 import { fetchBrands } from '../repositories/brandRepository';
 import { logInfo, logWarning, logError } from '../utils/';
 import * as LogoUtils from '../utils/logoUtils';
-import { Session } from '../durableObjects/session';
-import type { Brand, StoredQuestion, Bindings, Result, ApiStartSessionResponse } from '../types';
-import { SessionErrorCode } from '../types';
 
-export const handleStartSession = async (session: Session, env: Bindings): Promise<Result<ApiStartSessionResponse>> => {
+export async function handleStartSession(session: SessionContext, env: Bindings): Promise<Result<ApiStartSessionResponse>> {
 	try {
-		const brands: Brand[] = await fetchBrands(env, session.state.id.toString());
+		const brands: Brand[] = await fetchBrands(env, session.sessionId);
 		if (brands.length === 0) {
-			logWarning('session_start_no_brands', session.state.id.toString());
+			logWarning('session_start_no_brands', session.sessionId);
 			return {
 				success: false,
 				error: { code: SessionErrorCode.NO_BRANDS_AVAILABLE, message: 'No brands available' },
@@ -18,7 +18,7 @@ export const handleStartSession = async (session: Session, env: Bindings): Promi
 
 		const storedQuestions: StoredQuestion[] = LogoUtils.generateLogoQuestions(brands, env.MEDIA_BASE_URL);
 		if (storedQuestions.length === 0) {
-			logWarning('session_start_no_questions', session.state.id.toString());
+			logWarning('session_start_no_questions', session.sessionId);
 			return {
 				success: false,
 				error: { code: SessionErrorCode.NO_QUESTIONS_AVAILABLE, message: 'No questions available' },
@@ -34,7 +34,7 @@ export const handleStartSession = async (session: Session, env: Bindings): Promi
 
 		await session.save();
 
-		logInfo('session_started', session.state.id.toString(), {
+		logInfo('session_started', session.sessionId, {
 			questionCount: storedQuestions.length,
 		});
 
@@ -46,10 +46,10 @@ export const handleStartSession = async (session: Session, env: Bindings): Promi
 			},
 		};
 	} catch (error) {
-		logError('session_start_error', session.state.id.toString(), error);
+		logError('session_start_error', session.sessionId, error);
 		return {
 			success: false,
 			error: { code: SessionErrorCode.INTERNAL_ERROR, message: 'Failed to start session' },
 		};
 	}
-};
+}

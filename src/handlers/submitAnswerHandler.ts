@@ -1,5 +1,6 @@
-import { AnswerRequest, SubmitAnswerResult, SessionErrorCode } from '../types';
-import { Session } from '../durableObjects/session';
+import type { SessionContext } from '../types/session';
+import type { AnswerRequest, SubmitAnswerResult } from '../types';
+import { SessionErrorCode } from '../types';
 import {
 	calculateLogoQuizScore,
 	generateLogoUrl,
@@ -10,16 +11,16 @@ import {
 	logError,
 } from '../utils/';
 
-export async function handleSubmitAnswer(session: Session, answerData: AnswerRequest, baseUrl: string): Promise<SubmitAnswerResult> {
+export async function handleSubmitAnswer(session: SessionContext, answerData: AnswerRequest, baseUrl: string): Promise<SubmitAnswerResult> {
 	try {
 		if (!session.sessionData) {
-			logWarning('answer_submission_no_session', session.state.id.toString());
+			logWarning('answer_submission_no_session', session.sessionId);
 			return {
 				success: false,
 				error: { code: SessionErrorCode.NO_ACTIVE_SESSION, message: 'No active session' },
 			};
 		} else if (session.sessionData.lives <= 0) {
-			logWarning('answer_submission_game_over', session.state.id.toString());
+			logWarning('answer_submission_game_over', session.sessionId);
 			return {
 				success: false,
 				error: { code: SessionErrorCode.GAME_OVER, message: 'Game over' },
@@ -27,7 +28,7 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 		}
 
 		if (!isValidAnswerSubmission(answerData)) {
-			logWarning('answer_submission_invalid_format', session.state.id.toString());
+			logWarning('answer_submission_invalid_format', session.sessionId);
 			return {
 				success: false,
 				error: { code: SessionErrorCode.INVALID_INPUT_FORMAT, message: 'Invalid input format' },
@@ -38,7 +39,7 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 
 		const correctAnswer = session.sessionData.questions[questionNumber];
 		if (!correctAnswer || session.sessionData.currentQuestion !== questionNumber) {
-			logWarning('answer_submission_invalid_question', session.state.id.toString(), {
+			logWarning('answer_submission_invalid_question', session.sessionId, {
 				currentQuestion: session.sessionData.currentQuestion,
 				questionNumber,
 			});
@@ -50,7 +51,7 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 
 		const isCorrect = correctAnswer.brandId === brandId;
 
-		logInfo('answer_submitted', session.state.id.toString(), { questionNumber, isCorrect });
+		logInfo('answer_submitted', session.sessionId, { questionNumber, isCorrect });
 
 		session.sessionData.score += isCorrect ? calculateLogoQuizScore(correctAnswer.difficulty) : 0;
 		session.sessionData.lives -= isCorrect ? 0 : 1;
@@ -62,10 +63,10 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 			if (timeTaken && timeTaken > 0) {
 				const bonusScore = calculateTimeTakenBonus(timeTaken);
 				session.sessionData.score += bonusScore;
-				logInfo('answer_bonus_score_added', session.state.id.toString(), { timeTaken, bonusScore });
+				logInfo('answer_bonus_score_added', session.sessionId, { timeTaken, bonusScore });
 			}
 
-			logInfo('answer_session_completed', session.state.id.toString(), { finalScore: session.sessionData.score });
+			logInfo('answer_session_completed', session.sessionId, { finalScore: session.sessionData.score });
 
 			const result: SubmitAnswerResult = {
 				success: true,
@@ -93,7 +94,7 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 			},
 		};
 	} catch (error) {
-		logError('answer_submission_error', session.state.id.toString(), error);
+		logError('answer_submission_error', session.sessionId, error);
 		return {
 			success: false,
 			error: { code: SessionErrorCode.INTERNAL_ERROR, message: 'Failed to submit answer' },

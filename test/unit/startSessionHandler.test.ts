@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { handleStartSession } from '../../src/handlers/startSessionHandler';
 import { fetchBrands } from '../../src/repositories/brandRepository';
 import * as LogoUtils from '../../src/utils/logoUtils';
+import type { SessionContext } from '../../src/types/session';
 import type { StoredQuestion, Brand, Bindings } from '../../src/types';
 import { SessionErrorCode } from '../../src/types';
 
@@ -12,9 +13,7 @@ vi.mock('../../src/utils/logoUtils', () => ({ generateLogoQuestions: vi.fn() }))
 const DO_ID = 'do-id-123';
 
 describe('handleStartSession', () => {
-	let fakeSession: {
-		sessionData: any;
-		state: { id: { toString: () => string } };
+	let fakeSession: SessionContext & {
 		save: ReturnType<typeof vi.fn>;
 	};
 	let fakeEnv: Bindings;
@@ -44,9 +43,10 @@ describe('handleStartSession', () => {
 		} as Bindings;
 
 		fakeSession = {
+			sessionId: DO_ID,
 			sessionData: null,
-			state: { id: { toString: () => DO_ID } },
 			save: vi.fn().mockResolvedValue(undefined),
+			clear: vi.fn().mockResolvedValue(undefined),
 		};
 	});
 
@@ -54,7 +54,7 @@ describe('handleStartSession', () => {
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 		(LogoUtils.generateLogoQuestions as any).mockReturnValue(mockQuestions);
 
-		const result = await handleStartSession(fakeSession as any, fakeEnv);
+		const result = await handleStartSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(true);
 		if (result.success) {
@@ -88,7 +88,7 @@ describe('handleStartSession', () => {
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 		(LogoUtils.generateLogoQuestions as any).mockReturnValue(mockQuestions);
 
-		const result = await handleStartSession(fakeSession as any, fakeEnv);
+		const result = await handleStartSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(true);
 		expect(fakeSession.sessionData.score).toBe(0);
@@ -100,7 +100,7 @@ describe('handleStartSession', () => {
 	it('returns NO_BRANDS_AVAILABLE when fetchBrands returns empty array', async () => {
 		(fetchBrands as any).mockResolvedValue([]);
 
-		const result = await handleStartSession(fakeSession as any, fakeEnv);
+		const result = await handleStartSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {
@@ -116,7 +116,7 @@ describe('handleStartSession', () => {
 		(fetchBrands as any).mockResolvedValue(mockBrands);
 		(LogoUtils.generateLogoQuestions as any).mockReturnValue([]);
 
-		const result = await handleStartSession(fakeSession as any, fakeEnv);
+		const result = await handleStartSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {
@@ -130,7 +130,7 @@ describe('handleStartSession', () => {
 	it('returns INTERNAL_ERROR when fetchBrands throws', async () => {
 		(fetchBrands as any).mockRejectedValue(new Error('Database failure'));
 
-		const result = await handleStartSession(fakeSession as any, fakeEnv);
+		const result = await handleStartSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {
@@ -144,7 +144,7 @@ describe('handleStartSession', () => {
 		(LogoUtils.generateLogoQuestions as any).mockReturnValue(mockQuestions);
 		fakeSession.save.mockRejectedValue(new Error('Storage failure'));
 
-		const result = await handleStartSession(fakeSession as any, fakeEnv);
+		const result = await handleStartSession(fakeSession, fakeEnv);
 
 		expect(result.success).toBe(false);
 		if (!result.success) {

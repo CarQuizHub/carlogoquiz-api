@@ -1,12 +1,11 @@
 export const EXPECTED_BRAND_COUNT = 89;
 export const EXPECTED_QUESTION_COUNT = 15;
-const SESSION_STATE_KEY = 'state';
 
 import { env } from 'cloudflare:test';
 import { runInDurableObject } from 'cloudflare:test';
 import { expect } from 'vitest';
 
-import type { AnswerRequest, SessionData } from '../../src/types';
+import { SESSION_STATE_KEY, type AnswerRequest, type SessionData } from '../../src/types';
 import { QuizApi } from '../../src/services/quizApi';
 
 export function getApi(): QuizApi {

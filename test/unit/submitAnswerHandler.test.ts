@@ -12,16 +12,15 @@ vi.mock('../../src/utils', async () => {
 
 import { handleSubmitAnswer } from '../../src/handlers/submitAnswerHandler';
 import { calculateTimeTakenBonus } from '../../src/utils';
-import type { SessionData, AnswerRequest, StoredQuestion } from '../../src/types';
+import type { SessionContext } from '../../src/types/session';
+import type { AnswerRequest, StoredQuestion } from '../../src/types';
 import { SessionErrorCode } from '../../src/types';
 
 const DO_ID = 'do-id-123';
 const MEDIA_BASE_URL = 'https://cdn.example.com';
 
 describe('handleSubmitAnswer', () => {
-	let fakeSession: {
-		sessionData: SessionData | null;
-		state: { id: { toString: () => string } };
+	let fakeSession: SessionContext & {
 		save: ReturnType<typeof vi.fn>;
 		clear: ReturnType<typeof vi.fn>;
 	};
@@ -36,13 +35,13 @@ describe('handleSubmitAnswer', () => {
 		];
 
 		fakeSession = {
+			sessionId: DO_ID,
 			sessionData: {
 				score: 0,
 				lives: 3,
 				currentQuestion: 0,
 				questions: mockQuestions,
 			},
-			state: { id: { toString: () => DO_ID } },
 			save: vi.fn().mockResolvedValue(undefined),
 			clear: vi.fn().mockImplementation(async () => {
 				fakeSession.sessionData = null;
@@ -54,7 +53,7 @@ describe('handleSubmitAnswer', () => {
 		it('processes correct answer and updates session', async () => {
 			const answerData: AnswerRequest = { questionNumber: 0, brandId: 1, timeTaken: null };
 
-			const result = await handleSubmitAnswer(fakeSession as any, answerData, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(true);
 			if (result.success) {
@@ -71,10 +70,10 @@ describe('handleSubmitAnswer', () => {
 
 		it('completes game on final correct answer and clears session', async () => {
 			// Answer first question
-			await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			await handleSubmitAnswer(fakeSession, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
 			// Answer final question
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 1, brandId: 2, timeTaken: 500 }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 1, brandId: 2, timeTaken: 500 }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(true);
 			if (result.success) {
@@ -88,9 +87,9 @@ describe('handleSubmitAnswer', () => {
 		});
 
 		it('does not apply time bonus when timeTaken is null on final question', async () => {
-			await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			await handleSubmitAnswer(fakeSession, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 1, brandId: 2, timeTaken: null }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 1, brandId: 2, timeTaken: null }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(true);
 			if (result.success) {
@@ -101,9 +100,9 @@ describe('handleSubmitAnswer', () => {
 		});
 
 		it('does not apply time bonus when timeTaken is 0 on final question', async () => {
-			await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			await handleSubmitAnswer(fakeSession, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 1, brandId: 2, timeTaken: 0 }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 1, brandId: 2, timeTaken: 0 }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(true);
 			if (result.success) {
@@ -118,7 +117,7 @@ describe('handleSubmitAnswer', () => {
 		it('processes incorrect answer and decrements lives', async () => {
 			const answerData: AnswerRequest = { questionNumber: 0, brandId: 999, timeTaken: null };
 
-			const result = await handleSubmitAnswer(fakeSession as any, answerData, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, answerData, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(true);
 			if (result.success) {
@@ -140,7 +139,7 @@ describe('handleSubmitAnswer', () => {
 				questions: mockQuestions,
 			};
 
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 999, timeTaken: null }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 0, brandId: 999, timeTaken: null }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(true);
 			if (result.success) {
@@ -160,7 +159,7 @@ describe('handleSubmitAnswer', () => {
 				questions: mockQuestions,
 			};
 
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -174,7 +173,7 @@ describe('handleSubmitAnswer', () => {
 		it('returns NO_ACTIVE_SESSION when sessionData is null', async () => {
 			fakeSession.sessionData = null;
 
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -184,7 +183,7 @@ describe('handleSubmitAnswer', () => {
 		});
 
 		it('returns INVALID_INPUT_FORMAT when questionNumber is missing', async () => {
-			const result = await handleSubmitAnswer(fakeSession as any, { brandId: 1 } as AnswerRequest, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { brandId: 1 } as AnswerRequest, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -194,7 +193,7 @@ describe('handleSubmitAnswer', () => {
 		});
 
 		it('returns INVALID_INPUT_FORMAT when brandId is missing', async () => {
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0 } as AnswerRequest, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 0 } as AnswerRequest, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -204,7 +203,7 @@ describe('handleSubmitAnswer', () => {
 		});
 
 		it('returns INVALID_INPUT_FORMAT for empty object', async () => {
-			const result = await handleSubmitAnswer(fakeSession as any, {} as AnswerRequest, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, {} as AnswerRequest, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -214,7 +213,7 @@ describe('handleSubmitAnswer', () => {
 
 		it('returns INVALID_QUESTION_NUMBER when answering wrong question', async () => {
 			const result = await handleSubmitAnswer(
-				fakeSession as any,
+				fakeSession,
 				{ questionNumber: 1, brandId: 2, timeTaken: null }, // currentQuestion is 0
 				MEDIA_BASE_URL,
 			);
@@ -227,7 +226,7 @@ describe('handleSubmitAnswer', () => {
 		});
 
 		it('returns INVALID_QUESTION_NUMBER for negative question number', async () => {
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: -1, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: -1, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -236,7 +235,7 @@ describe('handleSubmitAnswer', () => {
 		});
 
 		it('returns INVALID_QUESTION_NUMBER for out-of-bounds question', async () => {
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 99, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 99, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -249,7 +248,7 @@ describe('handleSubmitAnswer', () => {
 		it('returns INTERNAL_ERROR when save() throws', async () => {
 			fakeSession.save.mockRejectedValue(new Error('Storage failure'));
 
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {
@@ -259,11 +258,11 @@ describe('handleSubmitAnswer', () => {
 		});
 
 		it('returns INTERNAL_ERROR when clear() throws on game completion', async () => {
-			await handleSubmitAnswer(fakeSession as any, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
+			await handleSubmitAnswer(fakeSession, { questionNumber: 0, brandId: 1, timeTaken: null }, MEDIA_BASE_URL);
 
 			fakeSession.clear.mockRejectedValue(new Error('Clear failure'));
 
-			const result = await handleSubmitAnswer(fakeSession as any, { questionNumber: 1, brandId: 2, timeTaken: 500 }, MEDIA_BASE_URL);
+			const result = await handleSubmitAnswer(fakeSession, { questionNumber: 1, brandId: 2, timeTaken: 500 }, MEDIA_BASE_URL);
 
 			expect(result.success).toBe(false);
 			if (!result.success) {

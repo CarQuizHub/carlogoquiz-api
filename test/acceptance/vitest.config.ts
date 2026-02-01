@@ -12,7 +12,6 @@ export default defineWorkersConfig(async () => {
 			setupFiles: [path.resolve(__dirname, './setup.ts'), path.resolve(__dirname, './testSetup.ts')],
 			poolOptions: {
 				workers: {
-					singleWorker: true,
 					wrangler: {
 						configPath: '../../wrangler.json',
 						env: 'dev',
