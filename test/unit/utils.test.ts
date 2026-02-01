@@ -26,7 +26,6 @@ const createFullBrandSet = (): Brand[] => [
 	...Array.from({ length: 10 }, (_, i) => createBrand(i + 41, 5)),
 ];
 
-// -------------------- generateLogoQuestions --------------------
 describe('generateLogoQuestions', () => {
 	it('returns exactly 15 questions', () => {
 		const questions: StoredQuestion[] = generateLogoQuestions(createFullBrandSet(), MEDIA_BASE_URL);
@@ -102,7 +101,6 @@ describe('generateLogoQuestions', () => {
 	});
 });
 
-// -------------------- generateLogoUrl --------------------
 describe('generateLogoUrl', () => {
 	const baseUrl = 'https://cdn.example.com';
 
@@ -122,7 +120,6 @@ describe('generateLogoUrl', () => {
 	});
 });
 
-// -------------------- calculateTimeTakenBonus --------------------
 describe('calculateTimeTakenBonus', () => {
 	it('returns no bonus for negative timeTaken', () => {
 		expect(calculateTimeTakenBonus(-10)).toBe(0);
@@ -148,7 +145,6 @@ describe('calculateTimeTakenBonus', () => {
 	});
 });
 
-// -------------------- isValidAnswerSubmission --------------------
 describe('isValidAnswerSubmission', () => {
 	describe('valid submissions', () => {
 		it('accepts valid submission with required fields', () => {
@@ -203,7 +199,6 @@ describe('isValidAnswerSubmission', () => {
 	});
 });
 
-// -------------------- calculateLogoQuizScore --------------------
 describe('calculateLogoQuizScore', () => {
 	describe('easy difficulties (≤2) return 1 point', () => {
 		it('returns 1 for difficulty 0', () => {

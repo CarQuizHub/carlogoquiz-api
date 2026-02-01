@@ -10,6 +10,8 @@ import {
 	type Result,
 	type ApiStartSessionResponse,
 	SESSION_STATE_KEY,
+	SESSION_TTL_MS,
+	AlarmInfo,
 } from '../types';
 import { handleStartSession } from '../handlers/startSessionHandler';
 import { handleRestoreSession } from '../handlers/restoreSessionHandler';
@@ -40,27 +42,48 @@ export class Session extends DurableObject<Bindings> implements SessionContext {
 	}
 
 	async clear(): Promise<void> {
-		await this.ctx.storage.deleteAll();
 		this.sessionData = null;
+		await this.ctx.storage.deleteAlarm();
+		await this.ctx.storage.deleteAll();
+	}
+
+	async alarm(alarmInfo?: AlarmInfo): Promise<void> {
+		logInfo('session_expired', this.sessionId, {
+			hadData: !!this.sessionData,
+			isRetry: alarmInfo?.isRetry ?? false,
+			retryCount: alarmInfo?.retryCount ?? 0,
+		});
+		this.sessionData = null;
+		await this.ctx.storage.deleteAll();
 	}
 
 	async startSession(): Promise<Result<ApiStartSessionResponse>> {
 		logInfo('session_start_request', this.sessionId);
-		return handleStartSession(this, this.env);
+		const result = await handleStartSession(this, this.env);
+
+		if (result.success) {
+			await this.setExpirationAlarm();
+		}
+
+		return result;
 	}
 
 	async restoreSession(): Promise<Result<ApiStartSessionResponse>> {
 		logInfo('session_restore_request', this.sessionId);
-		return handleRestoreSession(this, this.env);
+		return await handleRestoreSession(this, this.env);
 	}
 
 	async submitAnswer(answerData: AnswerRequest): Promise<SubmitAnswerResult> {
 		logInfo('session_answer_request', this.sessionId);
-		return handleSubmitAnswer(this, answerData, this.env.MEDIA_BASE_URL);
+		return await handleSubmitAnswer(this, answerData, this.env.MEDIA_BASE_URL);
 	}
 
 	async endSession(): Promise<EndSessionResult> {
 		logInfo('session_end_request', this.sessionId);
-		return handleEndSession(this);
+		return await handleEndSession(this);
+	}
+
+	private async setExpirationAlarm(): Promise<void> {
+		await this.ctx.storage.setAlarm(Date.now() + SESSION_TTL_MS);
 	}
 }

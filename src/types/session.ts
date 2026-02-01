@@ -24,3 +24,8 @@ export interface SessionContext {
 	save(): Promise<void>;
 	clear(): Promise<void>;
 }
+
+export interface AlarmInfo {
+	retryCount: number;
+	isRetry: boolean;
+}
