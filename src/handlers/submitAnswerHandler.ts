@@ -36,7 +36,8 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 
 		const { questionNumber, brandId, timeTaken } = answerData;
 
-		if (!session.sessionData.questions[questionNumber] || session.sessionData.currentQuestion !== questionNumber) {
+		const correctAnswer = session.sessionData.questions[questionNumber];
+		if (!correctAnswer || session.sessionData.currentQuestion !== questionNumber) {
 			logWarning('answer_submission_invalid_question', session.state.id.toString(), {
 				currentQuestion: session.sessionData.currentQuestion,
 				questionNumber,
@@ -47,7 +48,6 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 			};
 		}
 
-		const correctAnswer = session.sessionData.questions[questionNumber];
 		const isCorrect = correctAnswer.brandId === brandId;
 
 		logInfo('answer_submitted', session.state.id.toString(), { questionNumber, isCorrect });
@@ -56,7 +56,9 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 		session.sessionData.lives -= isCorrect ? 0 : 1;
 		session.sessionData.currentQuestion += isCorrect ? 1 : 0;
 
-		if (isCorrect && session.sessionData.currentQuestion === Object.keys(session.sessionData.questions).length) {
+		const isLastAnswered = isCorrect && session.sessionData.currentQuestion === session.sessionData.questions.length;
+
+		if (isLastAnswered) {
 			if (timeTaken && timeTaken > 0) {
 				const bonusScore = calculateTimeTakenBonus(timeTaken);
 				session.sessionData.score += bonusScore;
@@ -75,12 +77,11 @@ export async function handleSubmitAnswer(session: Session, answerData: AnswerReq
 				},
 			};
 
-			session.sessionData = null;
-			await session.state.storage.deleteAll();
+			await session.clear();
 			return result;
 		}
 
-		await session.state.storage.put('state', session.sessionData);
+		await session.save();
 
 		return {
 			success: true,

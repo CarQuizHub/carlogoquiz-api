@@ -6,7 +6,7 @@ import { CORS_OPTIONS } from '../config/constants';
 import { createJsonResponse } from '../api/response';
 import { logError } from '../utils/loggingUtils';
 import { QuizApi } from '../services/quizApi';
-import { resultToResponse } from '../handlers/durableObjectHandler';
+import { resultToResponse } from '../utils/resultToResponse';
 
 const app = new Hono<{ Bindings: Bindings }>();
 

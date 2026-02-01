@@ -9,4 +9,5 @@ export interface Bindings {
 	MEDIA_BASE_URL: string;
 	PRODUCTION: boolean;
 	BRANDS_CACHE_DURATION: string;
+	EXPOSE_HTTP: boolean;
 }

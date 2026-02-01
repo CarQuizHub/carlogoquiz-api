@@ -5,8 +5,9 @@ import { EndSessionResult, SessionErrorCode } from '../types';
 export async function handleEndSession(session: Session): Promise<EndSessionResult> {
 	try {
 		logInfo('session_end', session.state.id.toString(), { finalScore: session.sessionData?.score ?? -1 });
-		await session.state.storage.deleteAll();
-		session.sessionData = null;
+
+		await session.clear();
+
 		return { success: true, data: { message: 'Session ended and memory cleared' } };
 	} catch (error) {
 		logError('session_end_error', session.state.id.toString(), error);

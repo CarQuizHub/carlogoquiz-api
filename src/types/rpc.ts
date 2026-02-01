@@ -1,4 +1,4 @@
-import { ApiStartSessionResponse, ApiSubmitAnswerResponse } from './api';
+import { ApiStartSessionResponseWithId, ApiSubmitAnswerResponse } from './api';
 
 export enum SessionErrorCode {
 	NO_BRANDS_AVAILABLE = 'NO_BRANDS_AVAILABLE',
@@ -16,11 +16,19 @@ export interface SessionError {
 	code: SessionErrorCode;
 	message: string;
 }
+export interface RPCError {
+	success: false;
+	error: SessionError;
+}
 
-export type Result<T> = { success: true; data: T } | { success: false; error: SessionError };
+export interface SuccessfulResult<T> {
+	success: true;
+	data: T;
+}
 
-export type StartSessionResult = Result<ApiStartSessionResponse & { sessionId: string }>;
-export type RestoreSessionResult = Result<ApiStartSessionResponse & { sessionId: string }>;
+export type Result<T> = SuccessfulResult<T> | RPCError;
 
+export type StartSessionResult = Result<ApiStartSessionResponseWithId>;
+export type RestoreSessionResult = Result<ApiStartSessionResponseWithId>;
 export type SubmitAnswerResult = Result<ApiSubmitAnswerResponse>;
 export type EndSessionResult = Result<{ message: string }>;

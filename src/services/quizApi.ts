@@ -1,63 +1,43 @@
-import type { Bindings } from '../types';
 import type {
 	AnswerRequest,
 	StartSessionResult,
 	RestoreSessionResult,
 	SubmitAnswerResult,
 	EndSessionResult,
-	Result,
-	ApiStartSessionResponse,
+	Bindings,
+	RPCError,
 } from '../types';
-import type { Session } from '../durableObjects/session';
 import { SessionErrorCode } from '../types';
-
-const UUID_V4_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
-
-function isValidPublicSessionId(sessionId: string): boolean {
-	return UUID_V4_REGEX.test(sessionId);
-}
 
 export class QuizApi {
 	constructor(private env: Bindings) {}
 
-	private getStub(sessionId: string): Session {
-		const id = this.env.SESSION.idFromName(sessionId);
-		return this.env.SESSION.get(id) as unknown as Session;
-	}
-
 	async startSession(): Promise<StartSessionResult> {
-		const publicSessionId = crypto.randomUUID();
+		const id = this.env.SESSION.newUniqueId();
+		const sessionId = id.toString();
 
-		const stub = this.getStub(publicSessionId);
-		const inner: Result<ApiStartSessionResponse> = await stub.startSession();
+		const stub = this.env.SESSION.get(id);
+		const inner = await stub.startSession();
 
-		if (!inner.success) {
-			return { success: false, error: inner.error };
-		}
+		if (!inner.success) return inner;
 
 		return {
 			success: true,
 			data: {
-				sessionId: publicSessionId,
+				sessionId,
 				...inner.data,
 			},
 		};
 	}
 
 	async restoreSession(sessionId: string): Promise<RestoreSessionResult> {
-		if (!isValidPublicSessionId(sessionId)) {
-			return {
-				success: false,
-				error: { code: SessionErrorCode.INVALID_SESSION_ID, message: 'Invalid session_id' },
-			};
-		}
+		const id = this.parseSessionId(sessionId);
+		if (!id) return this.invalidSessionIdError();
 
-		const stub = this.getStub(sessionId);
-		const inner: Result<ApiStartSessionResponse> = await stub.restoreSession();
+		const stub = this.env.SESSION.get(id);
+		const inner = await stub.restoreSession();
 
-		if (!inner.success) {
-			return { success: false, error: inner.error };
-		}
+		if (!inner.success) return inner;
 
 		return {
 			success: true,
@@ -69,24 +49,33 @@ export class QuizApi {
 	}
 
 	async submitAnswer(sessionId: string, data: AnswerRequest): Promise<SubmitAnswerResult> {
-		if (!isValidPublicSessionId(sessionId)) {
-			return {
-				success: false,
-				error: { code: SessionErrorCode.INVALID_SESSION_ID, message: 'Invalid session_id' },
-			};
-		}
-		const stub = this.getStub(sessionId);
+		const id = this.parseSessionId(sessionId);
+		if (!id) return this.invalidSessionIdError();
+
+		const stub = this.env.SESSION.get(id);
 		return stub.submitAnswer(data);
 	}
 
 	async endSession(sessionId: string): Promise<EndSessionResult> {
-		if (!isValidPublicSessionId(sessionId)) {
-			return {
-				success: false,
-				error: { code: SessionErrorCode.INVALID_SESSION_ID, message: 'Invalid session_id' },
-			};
-		}
-		const stub = this.getStub(sessionId);
+		const id = this.parseSessionId(sessionId);
+		if (!id) return this.invalidSessionIdError();
+
+		const stub = this.env.SESSION.get(id);
 		return stub.endSession();
+	}
+
+	private parseSessionId(sessionId: string): DurableObjectId | null {
+		try {
+			return this.env.SESSION.idFromString(sessionId);
+		} catch {
+			return null;
+		}
+	}
+
+	private invalidSessionIdError(): RPCError {
+		return {
+			success: false,
+			error: { code: SessionErrorCode.INVALID_SESSION_ID, message: 'Invalid session_id' },
+		};
 	}
 }

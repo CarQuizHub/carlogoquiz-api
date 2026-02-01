@@ -25,13 +25,14 @@ function mapErrorCodeToStatus(code: SessionErrorCode): number {
 
 export function resultToResponse<T>(result: Result<T>): Response {
 	if (result.success) {
-		const data = result.data as any;
-
-		const headers = data && typeof data.sessionId === 'string' ? { session_id: data.sessionId } : undefined;
-
+		const headers = hasSessionId(result.data) ? { session_id: result.data.sessionId } : undefined;
 		return createJsonResponse(result.data, 200, headers);
 	}
 
 	const statusCode = mapErrorCodeToStatus(result.error.code);
-	return createJsonResponse({ error: result.error.message }, statusCode);
+	return createJsonResponse({ error: result.error.message, code: result.error.code }, statusCode);
+}
+
+function hasSessionId(data: unknown): data is { sessionId: string } {
+	return typeof (data as { sessionId?: unknown })?.sessionId === 'string';
 }

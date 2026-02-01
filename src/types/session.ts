@@ -12,5 +12,5 @@ export interface SessionData {
 	score: number;
 	lives: number;
 	currentQuestion: number;
-	questions: Record<number, StoredQuestion>;
+	questions: StoredQuestion[];
 }

@@ -6,8 +6,7 @@ import { SessionErrorCode } from '../types';
 
 export async function handleRestoreSession(session: Session, env: Bindings): Promise<Result<ApiStartSessionResponse>> {
 	try {
-		// session never started / was ended
-		if (!session.sessionData || Object.keys(session.sessionData.questions).length === 0) {
+		if (!session.sessionData || session.sessionData.questions.length === 0) {
 			logWarning('session_restore_not_found', session.state.id.toString());
 			return {
 				success: false,
@@ -23,7 +22,7 @@ export async function handleRestoreSession(session: Session, env: Bindings): Pro
 			success: true,
 			data: {
 				brands: brands.map(({ id, brand_name }) => ({ id, brand_name })),
-				questions: Object.values(session.sessionData.questions).map(({ logo }) => ({ question: { logo } })),
+				questions: session.sessionData.questions.map(({ logo }) => ({ question: { logo } })),
 			},
 		};
 	} catch (error) {

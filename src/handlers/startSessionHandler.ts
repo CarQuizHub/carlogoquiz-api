@@ -27,12 +27,12 @@ export const handleStartSession = async (session: Session, env: Bindings): Promi
 
 		session.sessionData = {
 			score: 0,
-			questions: Object.fromEntries(storedQuestions.map((q, index) => [index, q])),
+			questions: storedQuestions,
 			lives: 3,
 			currentQuestion: 0,
 		};
 
-		await session.state.storage.put('state', session.sessionData);
+		await session.save();
 
 		logInfo('session_started', session.state.id.toString(), {
 			questionCount: storedQuestions.length,

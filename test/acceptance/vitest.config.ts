@@ -25,6 +25,7 @@ export default defineWorkersConfig(async () => {
 						},
 						bindings: {
 							TEST_MIGRATIONS: migrations,
+							EXPOSE_HTTP: true,
 						},
 					},
 				},

@@ -21,6 +21,7 @@ const MOCK_ENV: Bindings = {
 		prepare: vi.fn(),
 	} as unknown as D1Database,
 	SESSION: {} as any,
+	EXPOSE_HTTP: false,
 };
 
 describe('fetchBrands', () => {
